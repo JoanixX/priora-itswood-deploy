@@ -1,0 +1,3341 @@
+{
+  "name": "ITS WOOD - Procesar mensaje",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c3403e05-927f-4cba-a721-4c7a8b5ebf0d",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f7bb1504-a524-4df2-a60d-12d59ab8e4f6",
+              "name": "sheetId",
+              "value": "PEGAR_ID_DE_LA_HOJA",
+              "type": "string"
+            },
+            {
+              "id": "c155e490-b8df-43d3-a246-54238c60ae6d",
+              "name": "phoneNumberId",
+              "value": "PEGAR_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "713bc946-6ae3-4513-aa57-ed637794cf22",
+              "name": "waAvisos",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "b28dc0d1-44ab-40fe-ac83-618e359b7546",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Valores del entorno. Edítalos aquí después de importar (o en config.local.json y vuelve a generar)."
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "mensaje_id",
+              "lookupValue": "={{ $('Entrada').first().json.mensaje_id }}"
+            }
+          ]
+        }
+      },
+      "id": "52e45ee4-b5d4-43f2-a812-5fa58fbbaa35",
+      "name": "Buscar evento",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Decisiones del subflujo \"Procesar mensaje\" que rodean al motor: duplicados, cambio de modo y envíos.\n// Se usan tal cual en los nodos Code de n8n y en el simulador local.\n\nfunction s(v) { return v === undefined || v === null ? '' : String(v); }\nfunction modoDe(fila) { return fila ? s(fila.modo).trim().toUpperCase() : ''; }\nfunction filaDe(filas, waId) { return (filas || []).find(f => f && s(f.wa_id) !== '' && s(f.wa_id) === s(waId)) || null; }\n\n// Un evento ya visto se omite salvo que haya quedado en RECIBIDO (falló antes de guardar el estado).\n// Si ya se guardó el estado no se recalcula: así no se repiten preguntas ni envíos.\nfunction esDuplicado(mensaje, filasEventos) {\n  return (filasEventos || []).some(f => f && s(f.mensaje_id) === s(mensaje.mensaje_id) && s(f.resultado) !== '' && s(f.resultado) !== 'RECIBIDO');\n}\n\n// Antes de guardar: si una persona cambió el modo mientras el motor trabajaba, no se pisa su cambio.\nfunction verificarCambioModo(motor, filasConversacion) {\n  const actual = modoDe(filaDe(filasConversacion, motor.wa_id));\n  return { cambio: actual !== s(motor.modo_leido).toUpperCase(), modo_actual: actual };\n}\n\n// Justo antes de enviar: se vuelve a comparar el modo guardado con el que dejó el motor.\nfunction prepararEnvios(motor, mensaje, filasConversacion, phoneNumberId) {\n  const actual = modoDe(filaDe(filasConversacion, motor.wa_id));\n  const esperado = s(motor.conversacion.modo).toUpperCase();\n  return (motor.respuestas || []).map((texto, i) => {\n    const base = {\n      wa_id: motor.wa_id, conversacion_id: motor.conversacion.conversacion_id,\n      en_respuesta_a: mensaje.mensaje_id, orden: i + 1, texto,\n    };\n    if (actual !== esperado) {\n      return { ...base, accion: 'registrar', resultado: 'OMITIDO_CAMBIO_MODO', mensaje_id: `OMIT-${mensaje.mensaje_id}-${i + 1}`, detalle: `modo actual ${actual || '(vacío)'}` };\n    }\n    if (mensaje.origen === 'api') {\n      return { ...base, accion: 'registrar', resultado: 'API', mensaje_id: `API-OUT-${mensaje.mensaje_id}-${i + 1}`, detalle: 'respuesta devuelta por la API' };\n    }\n    if (mensaje.origen === 'simulacion') {\n      return { ...base, accion: 'registrar', resultado: 'SIMULADO', mensaje_id: `SIM-${mensaje.mensaje_id}-${i + 1}`, detalle: 'webhook de simulación: no se envió por WhatsApp' };\n    }\n    return { ...base, accion: 'enviar', to: motor.wa_id, phone_number_id: s(mensaje.phone_number_id) || s(phoneNumberId) };\n  });\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { esDuplicado, verificarCambioModo, prepararEnvios, filaDe };\n\n// ---- n8n ----\nconst mensaje = $('Entrada').first().json;\nconst filas = $input.all().map(i => i.json);\nreturn esDuplicado(mensaje, filas) ? [] : [{ json: mensaje }];"
+      },
+      "id": "ced8f9bc-17d2-4e0e-a38f-91119f26ff31",
+      "name": "Detectar duplicado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $('Entrada').first().json.mensaje_id }}",
+            "fecha": "={{ $('Entrada').first().json.fecha_iso }}",
+            "wa_id": "={{ $('Entrada').first().json.wa_id }}",
+            "conversacion_id": "",
+            "direccion": "ENTRADA",
+            "tipo": "={{ $('Entrada').first().json.tipo }}",
+            "texto": "={{ $('Entrada').first().json.texto }}",
+            "media_id": "={{ $('Entrada').first().json.media_id }}",
+            "resultado": "RECIBIDO",
+            "detalle": ""
+          },
+          "matchingColumns": [
+            "mensaje_id"
+          ],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "51d99954-24d3-4805-a5ce-1060bc1a8dca",
+      "name": "Registrar recepción",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "PROVEEDORES",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "13b6e9dc-5bb1-4a08-ac65-d81740b40c99",
+      "name": "Leer proveedores",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        520
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Confirmación de órdenes y cotizaciones a proveedores.\n// Cuando el equipo confirma una orden (formulario de atención o API), se eligen los proveedores de la pestaña\n// PROVEEDORES que atienden ese producto y se les manda la plantilla de WhatsApp para pedir cotización.\n// Cuando un proveedor responde, su mensaje se guarda como respuesta de la cotización y no pasa por el bot de clientes.\n// Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\nconst PLANTILLA_COTIZACION = 'itswood_solicitud_cotizacion|es';\nconst ESTADOS_CONTACTADO = ['ENVIADA', 'SIMULADA', 'RESPONDIDA'];\nconst COLUMNAS_PROVEEDOR = ['proveedor_id', 'nombre', 'whatsapp', 'rubro', 'productos', 'contacto', 'activo', 'notas'];\nconst COLUMNAS_COTIZACION = [\n  'cotizacion_id', 'solicitud_id', 'proveedor_id', 'proveedor_nombre', 'wa_proveedor', 'producto', 'cantidad',\n  'enviado_en', 'estado', 'mensaje_id', 'respuesta', 'respondido_en', 'detalle',\n];\n\nfunction v(x) { return x === undefined || x === null ? '' : String(x).trim(); }\nfunction n(x) { return v(x).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim(); }\n\n// Números de Perú con 9 dígitos se completan con 51; el resto se usa tal cual (solo dígitos).\nfunction normalizarWhatsapp(x) {\n  const d = v(x).replace(/\\D/g, '');\n  if (/^9\\d{8}$/.test(d)) return `51${d}`;\n  return d.length >= 10 ? d : '';\n}\n\n// Meta no acepta saltos de línea, tabuladores ni más de 4 espacios seguidos en los parámetros de una plantilla.\nfunction parametroPlantilla(x, max) {\n  const s = v(x).replace(/\\s+/g, ' ').trim();\n  return (s.length > (max || 200) ? s.slice(0, max || 200) : s) || '-';\n}\n\nfunction fechaVisible(x) {\n  const s = v(x);\n  return /^\\d{4}-\\d{2}-\\d{2}$/.test(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : s;\n}\n\nfunction leerProveedores(filas) {\n  return (filas || []).map(f => ({\n    proveedor_id: v(f.proveedor_id),\n    nombre: v(f.nombre),\n    whatsapp: normalizarWhatsapp(f.whatsapp),\n    // \"TODOS\" atiende cualquier producto; si no, nombres internos separados por coma o punto y coma.\n    productos: v(f.productos).split(/[;,]/).map(n).filter(Boolean),\n    activo: n(f.activo) !== 'no',\n  })).filter(p => p.proveedor_id && p.nombre && p.activo);\n}\n\nfunction proveedoresPara(nombreInterno, proveedores) {\n  const clave = n(nombreInterno);\n  return proveedores.filter(p => p.whatsapp && (p.productos.includes('todos') || (clave && p.productos.includes(clave))));\n}\n\n// Devuelve qué hacer al confirmar una orden: actualizar la solicitud y a qué proveedores escribir.\n// Es idempotente: un proveedor ya contactado para esa solicitud no se vuelve a contactar.\nfunction prepararCotizaciones({ solicitud, proveedores, cotizaciones, catalogo, ahora, simular, phoneNumberId }) {\n  const ahoraIso = ahora || new Date().toISOString();\n  const error = (texto, status) => ({ ok: false, status: status || 400, error: texto, envios: [] });\n  if (!solicitud || !v(solicitud.solicitud_id)) return error('No existe esa solicitud.', 404);\n  const solicitudId = v(solicitud.solicitud_id);\n  const cantidad = parseInt(v(solicitud.cantidad), 10);\n  if (!v(solicitud.producto_id) || !(cantidad > 0)) {\n    return error(`La solicitud ${solicitudId} no tiene producto y cantidad; complétalos antes de confirmar la orden.`);\n  }\n  const producto = (catalogo || []).find(c => v(c.id) === v(solicitud.producto_id)) || {};\n  const nombreInterno = v(producto.nombre_interno);\n  const candidatos = proveedoresPara(nombreInterno, leerProveedores(proveedores));\n  const yaContactados = new Set((cotizaciones || [])\n    .filter(c => v(c.solicitud_id) === solicitudId && ESTADOS_CONTACTADO.includes(v(c.estado)))\n    .map(c => v(c.proveedor_id)));\n\n  const envios = candidatos.filter(p => !yaContactados.has(p.proveedor_id)).map(p => ({\n    accion: simular ? 'registrar' : 'enviar',\n    cotizacion_id: `COT-${solicitudId}-${p.proveedor_id}`,\n    solicitud_id: solicitudId,\n    proveedor_id: p.proveedor_id,\n    proveedor_nombre: p.nombre,\n    wa_proveedor: p.whatsapp,\n    producto: v(solicitud.producto_nombre),\n    cantidad,\n    enviado_en: ahoraIso,\n    estado: simular ? 'SIMULADA' : 'ENVIADA',\n    phone_number_id: v(phoneNumberId),\n    plantilla: PLANTILLA_COTIZACION,\n    // Orden de {{1}}…{{6}} en la plantilla aprobada (ver docs/proveedores.md).\n    parametros: [\n      parametroPlantilla(p.nombre, 60),\n      parametroPlantilla(solicitudId, 60),\n      parametroPlantilla(solicitud.producto_nombre, 120),\n      String(cantidad),\n      parametroPlantilla(v(solicitud.personalizacion) || 'Sin personalización', 200),\n      parametroPlantilla(fechaVisible(solicitud.fecha_deseada) || 'Por definir', 40),\n    ],\n  }));\n\n  let resumen = `Orden ${solicitudId} confirmada.`;\n  if (!nombreInterno) resumen += ' El producto no tiene nombre_interno en BOT_CATALOGO; solo se contactó a proveedores con TODOS.';\n  if (!candidatos.length) resumen += ' No hay proveedores activos para este producto en PROVEEDORES.';\n  else if (!envios.length) resumen += ' Todos los proveedores de este producto ya habían sido contactados.';\n  else resumen += ` Se ${simular ? 'simuló el pedido' : 'pidió cotización'} a ${envios.length} proveedor(es): ${envios.map(e => e.proveedor_nombre).join(', ')}.`;\n\n  return {\n    ok: true,\n    status: 200,\n    solicitud_id: solicitudId,\n    actualizar_solicitud: { solicitud_id: solicitudId, estado: 'ORDEN_CONFIRMADA' },\n    ya_contactados: [...yaContactados],\n    envios,\n    resumen,\n  };\n}\n\n// Mensaje entrante: si viene de un proveedor, se registra como respuesta de su cotización abierta más reciente.\nfunction identificarProveedor(mensaje, proveedores) {\n  const wa = normalizarWhatsapp(mensaje && mensaje.wa_id);\n  const p = leerProveedores(proveedores).find(x => x.whatsapp && x.whatsapp === wa);\n  return p ? { es_proveedor: true, proveedor_id: p.proveedor_id, proveedor_nombre: p.nombre } : { es_proveedor: false };\n}\n\nfunction registrarRespuestaProveedor({ mensaje, proveedor, cotizaciones, ahora }) {\n  const abiertas = (cotizaciones || [])\n    .filter(c => v(c.proveedor_id) === v(proveedor.proveedor_id) && ['ENVIADA', 'SIMULADA', 'RESPONDIDA'].includes(v(c.estado)))\n    .sort((a, b) => v(b.enviado_en).localeCompare(v(a.enviado_en)));\n  const cotizacion = abiertas[0];\n  const texto = v(mensaje.texto) || (mensaje.media_id ? `[${v(mensaje.tipo)} ${v(mensaje.media_id)}]` : `[${v(mensaje.tipo)}]`);\n  if (!cotizacion) return { actualizar: null, resultado: 'PROVEEDOR_SIN_COTIZACION_ABIERTA' };\n  const previa = v(cotizacion.respuesta);\n  const respuesta = (previa ? `${previa} | ${texto}` : texto).slice(0, 2000);\n  return {\n    actualizar: { cotizacion_id: v(cotizacion.cotizacion_id), estado: 'RESPONDIDA', respuesta, respondido_en: ahora || new Date().toISOString() },\n    resultado: 'RESPUESTA_PROVEEDOR',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    prepararCotizaciones, identificarProveedor, registrarRespuestaProveedor, normalizarWhatsapp,\n    PLANTILLA_COTIZACION, COLUMNAS_PROVEEDOR, COLUMNAS_COTIZACION,\n  };\n}\n\n// ---- n8n ----\nconst mensaje = $('Entrada').first().json;\nreturn [{ json: identificarProveedor(mensaje, $input.all().map(i => i.json)) }];"
+      },
+      "id": "53c62fbc-cfeb-4487-ad1c-75d7a88ce91f",
+      "name": "¿Es proveedor?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d672ec27-831d-4c8d-a8dd-7000d1059ce4",
+              "leftValue": "={{ $json.es_proveedor }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "26b2d920-10a0-4f2b-abe7-6c3b84d4ace2",
+      "name": "Proveedor",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_COTIZACIONES",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "proveedor_id",
+              "lookupValue": "={{ $('¿Es proveedor?').first().json.proveedor_id }}"
+            }
+          ]
+        }
+      },
+      "id": "1e426be3-4a4b-4317-a78a-dd157d5f0b48",
+      "name": "Leer cotizaciones del proveedor",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        700
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Confirmación de órdenes y cotizaciones a proveedores.\n// Cuando el equipo confirma una orden (formulario de atención o API), se eligen los proveedores de la pestaña\n// PROVEEDORES que atienden ese producto y se les manda la plantilla de WhatsApp para pedir cotización.\n// Cuando un proveedor responde, su mensaje se guarda como respuesta de la cotización y no pasa por el bot de clientes.\n// Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\nconst PLANTILLA_COTIZACION = 'itswood_solicitud_cotizacion|es';\nconst ESTADOS_CONTACTADO = ['ENVIADA', 'SIMULADA', 'RESPONDIDA'];\nconst COLUMNAS_PROVEEDOR = ['proveedor_id', 'nombre', 'whatsapp', 'rubro', 'productos', 'contacto', 'activo', 'notas'];\nconst COLUMNAS_COTIZACION = [\n  'cotizacion_id', 'solicitud_id', 'proveedor_id', 'proveedor_nombre', 'wa_proveedor', 'producto', 'cantidad',\n  'enviado_en', 'estado', 'mensaje_id', 'respuesta', 'respondido_en', 'detalle',\n];\n\nfunction v(x) { return x === undefined || x === null ? '' : String(x).trim(); }\nfunction n(x) { return v(x).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim(); }\n\n// Números de Perú con 9 dígitos se completan con 51; el resto se usa tal cual (solo dígitos).\nfunction normalizarWhatsapp(x) {\n  const d = v(x).replace(/\\D/g, '');\n  if (/^9\\d{8}$/.test(d)) return `51${d}`;\n  return d.length >= 10 ? d : '';\n}\n\n// Meta no acepta saltos de línea, tabuladores ni más de 4 espacios seguidos en los parámetros de una plantilla.\nfunction parametroPlantilla(x, max) {\n  const s = v(x).replace(/\\s+/g, ' ').trim();\n  return (s.length > (max || 200) ? s.slice(0, max || 200) : s) || '-';\n}\n\nfunction fechaVisible(x) {\n  const s = v(x);\n  return /^\\d{4}-\\d{2}-\\d{2}$/.test(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : s;\n}\n\nfunction leerProveedores(filas) {\n  return (filas || []).map(f => ({\n    proveedor_id: v(f.proveedor_id),\n    nombre: v(f.nombre),\n    whatsapp: normalizarWhatsapp(f.whatsapp),\n    // \"TODOS\" atiende cualquier producto; si no, nombres internos separados por coma o punto y coma.\n    productos: v(f.productos).split(/[;,]/).map(n).filter(Boolean),\n    activo: n(f.activo) !== 'no',\n  })).filter(p => p.proveedor_id && p.nombre && p.activo);\n}\n\nfunction proveedoresPara(nombreInterno, proveedores) {\n  const clave = n(nombreInterno);\n  return proveedores.filter(p => p.whatsapp && (p.productos.includes('todos') || (clave && p.productos.includes(clave))));\n}\n\n// Devuelve qué hacer al confirmar una orden: actualizar la solicitud y a qué proveedores escribir.\n// Es idempotente: un proveedor ya contactado para esa solicitud no se vuelve a contactar.\nfunction prepararCotizaciones({ solicitud, proveedores, cotizaciones, catalogo, ahora, simular, phoneNumberId }) {\n  const ahoraIso = ahora || new Date().toISOString();\n  const error = (texto, status) => ({ ok: false, status: status || 400, error: texto, envios: [] });\n  if (!solicitud || !v(solicitud.solicitud_id)) return error('No existe esa solicitud.', 404);\n  const solicitudId = v(solicitud.solicitud_id);\n  const cantidad = parseInt(v(solicitud.cantidad), 10);\n  if (!v(solicitud.producto_id) || !(cantidad > 0)) {\n    return error(`La solicitud ${solicitudId} no tiene producto y cantidad; complétalos antes de confirmar la orden.`);\n  }\n  const producto = (catalogo || []).find(c => v(c.id) === v(solicitud.producto_id)) || {};\n  const nombreInterno = v(producto.nombre_interno);\n  const candidatos = proveedoresPara(nombreInterno, leerProveedores(proveedores));\n  const yaContactados = new Set((cotizaciones || [])\n    .filter(c => v(c.solicitud_id) === solicitudId && ESTADOS_CONTACTADO.includes(v(c.estado)))\n    .map(c => v(c.proveedor_id)));\n\n  const envios = candidatos.filter(p => !yaContactados.has(p.proveedor_id)).map(p => ({\n    accion: simular ? 'registrar' : 'enviar',\n    cotizacion_id: `COT-${solicitudId}-${p.proveedor_id}`,\n    solicitud_id: solicitudId,\n    proveedor_id: p.proveedor_id,\n    proveedor_nombre: p.nombre,\n    wa_proveedor: p.whatsapp,\n    producto: v(solicitud.producto_nombre),\n    cantidad,\n    enviado_en: ahoraIso,\n    estado: simular ? 'SIMULADA' : 'ENVIADA',\n    phone_number_id: v(phoneNumberId),\n    plantilla: PLANTILLA_COTIZACION,\n    // Orden de {{1}}…{{6}} en la plantilla aprobada (ver docs/proveedores.md).\n    parametros: [\n      parametroPlantilla(p.nombre, 60),\n      parametroPlantilla(solicitudId, 60),\n      parametroPlantilla(solicitud.producto_nombre, 120),\n      String(cantidad),\n      parametroPlantilla(v(solicitud.personalizacion) || 'Sin personalización', 200),\n      parametroPlantilla(fechaVisible(solicitud.fecha_deseada) || 'Por definir', 40),\n    ],\n  }));\n\n  let resumen = `Orden ${solicitudId} confirmada.`;\n  if (!nombreInterno) resumen += ' El producto no tiene nombre_interno en BOT_CATALOGO; solo se contactó a proveedores con TODOS.';\n  if (!candidatos.length) resumen += ' No hay proveedores activos para este producto en PROVEEDORES.';\n  else if (!envios.length) resumen += ' Todos los proveedores de este producto ya habían sido contactados.';\n  else resumen += ` Se ${simular ? 'simuló el pedido' : 'pidió cotización'} a ${envios.length} proveedor(es): ${envios.map(e => e.proveedor_nombre).join(', ')}.`;\n\n  return {\n    ok: true,\n    status: 200,\n    solicitud_id: solicitudId,\n    actualizar_solicitud: { solicitud_id: solicitudId, estado: 'ORDEN_CONFIRMADA' },\n    ya_contactados: [...yaContactados],\n    envios,\n    resumen,\n  };\n}\n\n// Mensaje entrante: si viene de un proveedor, se registra como respuesta de su cotización abierta más reciente.\nfunction identificarProveedor(mensaje, proveedores) {\n  const wa = normalizarWhatsapp(mensaje && mensaje.wa_id);\n  const p = leerProveedores(proveedores).find(x => x.whatsapp && x.whatsapp === wa);\n  return p ? { es_proveedor: true, proveedor_id: p.proveedor_id, proveedor_nombre: p.nombre } : { es_proveedor: false };\n}\n\nfunction registrarRespuestaProveedor({ mensaje, proveedor, cotizaciones, ahora }) {\n  const abiertas = (cotizaciones || [])\n    .filter(c => v(c.proveedor_id) === v(proveedor.proveedor_id) && ['ENVIADA', 'SIMULADA', 'RESPONDIDA'].includes(v(c.estado)))\n    .sort((a, b) => v(b.enviado_en).localeCompare(v(a.enviado_en)));\n  const cotizacion = abiertas[0];\n  const texto = v(mensaje.texto) || (mensaje.media_id ? `[${v(mensaje.tipo)} ${v(mensaje.media_id)}]` : `[${v(mensaje.tipo)}]`);\n  if (!cotizacion) return { actualizar: null, resultado: 'PROVEEDOR_SIN_COTIZACION_ABIERTA' };\n  const previa = v(cotizacion.respuesta);\n  const respuesta = (previa ? `${previa} | ${texto}` : texto).slice(0, 2000);\n  return {\n    actualizar: { cotizacion_id: v(cotizacion.cotizacion_id), estado: 'RESPONDIDA', respuesta, respondido_en: ahora || new Date().toISOString() },\n    resultado: 'RESPUESTA_PROVEEDOR',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    prepararCotizaciones, identificarProveedor, registrarRespuestaProveedor, normalizarWhatsapp,\n    PLANTILLA_COTIZACION, COLUMNAS_PROVEEDOR, COLUMNAS_COTIZACION,\n  };\n}\n\n// ---- n8n ----\nconst mensaje = $('Entrada').first().json;\nconst proveedor = $('¿Es proveedor?').first().json;\nconst cotizaciones = $input.all().map(i => i.json);\nreturn [{ json: registrarRespuestaProveedor({ mensaje, proveedor, cotizaciones, ahora: new Date().toISOString() }) }];"
+      },
+      "id": "d71a9cd6-130d-4f2a-a8f1-5606c134dd72",
+      "name": "Respuesta de proveedor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "6a3b294d-4279-4501-a31a-6a6401c88a85",
+              "leftValue": "={{ !!$json.actualizar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "734eb0ab-a85c-4ea6-a9e5-2f9d6d8fedec",
+      "name": "¿Cotización abierta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_COTIZACIONES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cotizacion_id": "={{ $('Respuesta de proveedor').first().json.actualizar.cotizacion_id }}",
+            "estado": "={{ $('Respuesta de proveedor').first().json.actualizar.estado }}",
+            "respuesta": "={{ $('Respuesta de proveedor').first().json.actualizar.respuesta }}",
+            "respondido_en": "={{ $('Respuesta de proveedor').first().json.actualizar.respondido_en }}"
+          },
+          "matchingColumns": [
+            "cotizacion_id"
+          ],
+          "schema": [
+            {
+              "id": "cotizacion_id",
+              "displayName": "cotizacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "respuesta",
+              "displayName": "respuesta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "respondido_en",
+              "displayName": "respondido_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "9368a16c-d43a-46b1-aeff-90abd1d11b44",
+      "name": "Guardar respuesta en la cotización",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2200,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $('Entrada').first().json.mensaje_id }}",
+            "resultado": "={{ $('Respuesta de proveedor').first().json.resultado }}",
+            "detalle": "={{ $('¿Es proveedor?').first().json.proveedor_id }}"
+          },
+          "matchingColumns": [
+            "mensaje_id"
+          ],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "c9a6acb3-5e7f-4335-a314-c7d712879c4a",
+      "name": "Marcar respuesta de proveedor",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONVERSACIONES",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "wa_id",
+              "lookupValue": "={{ $('Entrada').first().json.wa_id }}"
+            }
+          ]
+        }
+      },
+      "id": "e2a53245-234d-4569-a82e-644f394235c7",
+      "name": "Leer conversación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CATALOGO",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "be7c5c0e-2dab-4cc5-a4a4-dd8a2b4afad4",
+      "name": "Leer catálogo",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "INVENTARIO",
+          "mode": "name"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "H3:I300"
+            }
+          }
+        }
+      },
+      "id": "9e20c3bd-a2be-4d78-a5ac-17bf7c287cc4",
+      "name": "Leer inventario",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        500
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONFIG",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "33e073d2-51fa-4c4a-a324-48f811992cb5",
+      "name": "Leer configuración",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        500
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_PRODUCTOS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "afad3cc3-c4a8-42a4-ab0b-b573f898dc9d",
+      "name": "Leer productos",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1540,
+        680
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Configuración editable del bot: pestaña BOT_CONFIG con las columnas clave | valor | descripcion.\n// El dashboard la cambia por la API y el bot la lee en cada mensaje. Una clave vacía o ausente toma el valor\n// por defecto. Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\nconst CONFIG_POR_DEFECTO = {\n  nombre_bot: 'Mermín',\n  nombre_negocio: 'ITS WOOD',\n  tono: 'cercano',\n  emoji_bot: '🌳',\n  url_web: '',\n  codigo_descuento_web: 'WEB10',\n  porcentaje_descuento_web: '10',\n  // Vacío: se usa la plantilla del tono elegido (ver plantillaBienvenida).\n  mensaje_bienvenida: '',\n  drive_folder_id: '',\n  sheet_fuente_id: '',\n  ultima_sync: '',\n  margen_por_defecto: '0.40',\n  umbral_prioridad_alta: '70',\n  umbral_prioridad_media: '40',\n  // Topes con los que se normalizan valor, ganancia y cantidad en la prioridad (recortados a 1).\n  tope_valor: '3000',\n  tope_ganancia: '1200',\n  tope_cantidad: '50',\n  tfr_antes_minutos: '180',\n  avisos_whatsapp: '',\n  avisos_email: '',\n  hora_resumen_diario: '19:00',\n};\n\nconst DESCRIPCIONES_CONFIG = {\n  nombre_bot: 'Nombre con el que se presenta el bot.',\n  nombre_negocio: 'Nombre del negocio en los mensajes.',\n  tono: 'cercano (tutea) o formal (trata de usted).',\n  emoji_bot: 'Emoji que acompaña al nombre del bot.',\n  url_web: 'Tienda web a la que se redirige en el primer mensaje. Vacío = sin enlace.',\n  codigo_descuento_web: 'Código de descuento para comprar en la web.',\n  porcentaje_descuento_web: 'Porcentaje del descuento web (solo el número).',\n  mensaje_bienvenida: 'Plantilla del primer mensaje: {hola}, {nombre_bot}, {emoji_bot}, {nombre_negocio}, {porcentaje}, {codigo}, {url}. Vacío = plantilla del tono.',\n  drive_folder_id: 'Carpeta de Drive con la hoja MERMIN_FUENTE. Se llena desde el dashboard.',\n  sheet_fuente_id: 'Hoja fuente detectada por la sincronización.',\n  ultima_sync: 'Fecha de la última sincronización correcta.',\n  margen_por_defecto: 'Margen para productos sin costo (0.40 = 40 %).',\n  umbral_prioridad_alta: 'Puntaje desde el que un lead es ALTA.',\n  umbral_prioridad_media: 'Puntaje desde el que un lead es MEDIA.',\n  tope_valor: 'Valor (S/) que cuenta como 100 % en la prioridad.',\n  tope_ganancia: 'Ganancia (S/) que cuenta como 100 % en la prioridad.',\n  tope_cantidad: 'Unidades que cuentan como 100 % en la prioridad.',\n  tfr_antes_minutos: 'Tiempo de primera respuesta antes del bot, en minutos (línea base manual).',\n  avisos_whatsapp: 'WhatsApp que recibe los avisos de leads ALTA (con código de país).',\n  avisos_email: 'Correos que reciben los resúmenes, separados por coma.',\n  hora_resumen_diario: 'Hora del resumen diario (HH:MM, hora de Lima).',\n};\n\n// Claves que el dashboard no edita con PUT /config: las escribe la sincronización o POST /config/drive.\nconst CLAVES_SOLO_LECTURA = ['sheet_fuente_id', 'ultima_sync', 'drive_folder_id'];\n\nconst PLANTILLAS_BIENVENIDA = {\n  cercano: '{hola} Soy {nombre_bot} {emoji_bot}, el asistente de {nombre_negocio}. {web}\\n¿Prefieres que te ayude por aquí? Cuéntame si es para tu *empresa* o para *ti*.',\n  formal: '{hola} Soy {nombre_bot} {emoji_bot}, el asistente de {nombre_negocio}. {web}\\n¿Prefiere que le ayude por aquí? Indíqueme si es para su *empresa* o para *usted*.',\n};\n\nfunction cfgTexto(v) { return v === undefined || v === null ? '' : String(v).trim(); }\n\n// Filas de BOT_CONFIG -> objeto con todas las claves (las desconocidas también se conservan).\nfunction leerConfig(filas) {\n  const config = { ...CONFIG_POR_DEFECTO };\n  for (const f of filas || []) {\n    const clave = cfgTexto(f && f.clave);\n    const valor = cfgTexto(f && f.valor);\n    if (clave && valor !== '') config[clave] = valor;\n  }\n  config.tono = config.tono.toLowerCase() === 'formal' ? 'formal' : 'cercano';\n  return config;\n}\n\nfunction numeroConfig(config, clave) {\n  const n = Number(cfgTexto(config[clave]).replace(',', '.'));\n  return Number.isFinite(n) ? n : Number(CONFIG_POR_DEFECTO[clave]);\n}\n\n// Reemplaza {clave} por su valor; las claves sin valor quedan vacías.\nfunction render(plantilla, valores) {\n  return cfgTexto(plantilla).replace(/\\{(\\w+)\\}/g, (_, k) => cfgTexto((valores || {})[k]));\n}\n\nfunction slug(v) {\n  return cfgTexto(v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\n}\n\n// URL de la web con UTM: así se mide qué ventas web vinieron del bot.\nfunction urlConUtm(config) {\n  const url = cfgTexto(config.url_web);\n  if (!url) return '';\n  return `${url}${url.includes('?') ? '&' : '?'}utm_source=whatsapp&utm_campaign=${slug(config.nombre_bot) || 'bot'}`;\n}\n\nfunction valoresPlantilla(config, extra) {\n  return {\n    ...config,\n    porcentaje: config.porcentaje_descuento_web,\n    codigo: config.codigo_descuento_web,\n    url: urlConUtm(config),\n    ...(extra || {}),\n  };\n}\n\n// Frase de la web con el descuento, o vacía si no hay URL.\nfunction fraseWeb(config) {\n  const url = urlConUtm(config);\n  if (!url) return '';\n  const compra = config.tono === 'formal' ? 'Compre' : 'Compra';\n  const lleva = config.tono === 'formal' ? 'llévese' : 'llévate';\n  const codigo = cfgTexto(config.codigo_descuento_web);\n  const pct = cfgTexto(config.porcentaje_descuento_web);\n  const descuento = pct && codigo ? ` y ${lleva} *${pct}% de descuento* con el código *${codigo}*` : '';\n  return `*${compra} en nuestra web*${descuento} 👉 ${url}`;\n}\n\nfunction plantillaBienvenida(config) {\n  return cfgTexto(config.mensaje_bienvenida) || PLANTILLAS_BIENVENIDA[config.tono] || PLANTILLAS_BIENVENIDA.cercano;\n}\n\nfunction mensajeBienvenida(config, nombre) {\n  const formal = config.tono === 'formal';\n  const hola = nombre ? `¡Hola de nuevo, ${nombre}!` : formal ? '¡Buen día!' : '¡Hola!';\n  const texto = render(plantillaBienvenida(config), valoresPlantilla(config, { hola, web: fraseWeb(config) }));\n  // Sin URL la frase de la web queda vacía: se limpian los espacios que deja.\n  return texto.replace(/[ \\t]+\\n/g, '\\n').replace(/[ \\t]{2,}/g, ' ').trim();\n}\n\n// Cambios pedidos por el dashboard ({ clave: valor }) -> filas a guardar, o error.\nfunction validarCambiosConfig(cambios) {\n  if (!cambios || typeof cambios !== 'object' || Array.isArray(cambios)) return { ok: false, error: 'El cuerpo debe ser un objeto { clave: valor }.' };\n  const filas = [];\n  for (const [clave, bruto] of Object.entries(cambios)) {\n    if (!(clave in CONFIG_POR_DEFECTO)) return { ok: false, error: `Clave desconocida: ${clave}.` };\n    if (CLAVES_SOLO_LECTURA.includes(clave)) return { ok: false, error: `${clave} no se edita con PUT /config.` };\n    const valor = cfgTexto(bruto);\n    if (valor.length > 1000) return { ok: false, error: `${clave} admite hasta 1000 caracteres.` };\n    if (clave === 'tono' && valor && !['cercano', 'formal'].includes(valor.toLowerCase())) return { ok: false, error: 'tono debe ser cercano o formal.' };\n    if (clave === 'hora_resumen_diario' && valor && !/^([01]?\\d|2[0-3]):[0-5]\\d$/.test(valor)) return { ok: false, error: 'hora_resumen_diario debe ser HH:MM.' };\n    if (clave === 'url_web' && valor && !/^https?:\\/\\/\\S+$/.test(valor)) return { ok: false, error: 'url_web debe empezar por http:// o https://.' };\n    const numericas = ['margen_por_defecto', 'umbral_prioridad_alta', 'umbral_prioridad_media', 'tope_valor', 'tope_ganancia', 'tope_cantidad', 'tfr_antes_minutos', 'porcentaje_descuento_web'];\n    if (numericas.includes(clave) && valor && !(Number(valor.replace(',', '.')) >= 0)) return { ok: false, error: `${clave} debe ser un número.` };\n    filas.push({ clave, valor, descripcion: DESCRIPCIONES_CONFIG[clave] || '' });\n  }\n  if (!filas.length) return { ok: false, error: 'No hay cambios.' };\n  return { ok: true, filas };\n}\n\n// Filas iniciales de BOT_CONFIG (plantilla de la hoja).\nfunction filasConfigIniciales() {\n  return Object.keys(CONFIG_POR_DEFECTO).map(clave => ({ clave, valor: CONFIG_POR_DEFECTO[clave], descripcion: DESCRIPCIONES_CONFIG[clave] || '' }));\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    leerConfig, render, numeroConfig, urlConUtm, fraseWeb, mensajeBienvenida, valoresPlantilla, validarCambiosConfig,\n    filasConfigIniciales, CONFIG_POR_DEFECTO, DESCRIPCIONES_CONFIG, CLAVES_SOLO_LECTURA, COLUMNAS_CONFIG: ['clave', 'valor', 'descripcion'],\n  };\n}\n'use strict';\n\n// Motor conversacional del bot de ITS WOOD.\n// No tiene dependencias: el mismo archivo se ejecuta en las pruebas de Node y dentro del nodo Code de n8n.\n// Recibe un mensaje normalizado, la fila de la conversación leída de Sheets y el catálogo; devuelve la fila\n// a guardar, las respuestas a enviar y, cuando corresponde, la solicitud y el cliente a registrar.\n// No escribe nada: quien lo llama guarda primero y envía después.\n\n// En n8n, config.js va concatenado antes de este archivo; en Node se carga con require.\nconst CONFIG_BOT = typeof leerConfig === 'function' ? { leerConfig, render, mensajeBienvenida, urlConUtm, fraseWeb, numeroConfig } : require('./config');\n\nconst ZONA_HORARIA = 'America/Lima';\nconst MAX_INTENTOS = 3;\nconst MAX_TEXTO = 1000;\nconst MAX_CANDIDATOS = 5;\n\nconst MODO = { BOT: 'BOT', PENDIENTE: 'PENDIENTE_HUMANO', HUMANO: 'HUMANO', CERRADO: 'CERRADO' };\n\n// Columnas que escribe el bot. \"responsable\" y \"notas\" pertenecen al equipo y el bot nunca las escribe.\nconst COLUMNAS_CONVERSACION = [\n  'wa_id', 'telefono', 'nombre_perfil', 'conversacion_id', 'modo', 'paso', 'segmento', 'empresa', 'nombre',\n  'ocasion', 'producto_id', 'producto_nombre', 'precio_unitario', 'cantidad', 'personalizacion', 'logo_media_id',\n  'fecha_deseada', 'direccion', 'horario_entrega', 'candidatos', 'intentos', 'motivo_derivacion', 'resumen',\n  'solicitud_id', 'ultima_entrada', 'creado_en', 'actualizado_en',\n  'intencion', 'puntaje_intencion', 'senales_intencion',\n];\nconst COLUMNAS_EQUIPO_CONVERSACION = ['responsable', 'notas'];\nconst COLUMNAS_SOLICITUD = [\n  'solicitud_id', 'fecha_registro', 'wa_id', 'telefono', 'conversacion_id', 'segmento', 'empresa', 'nombre',\n  'ocasion', 'producto_id', 'producto_nombre', 'precio_unitario_ref', 'cantidad', 'total_referencial',\n  'personalizacion', 'logo_media_id', 'fecha_deseada', 'fecha_confirmada', 'direccion', 'horario_entrega',\n  'motivo', 'resumen', 'estado', 'intencion', 'puntaje_intencion',\n  'valor_estimado', 'ganancia_estimada', 'prioridad', 'puntaje_prioridad',\n];\nconst COLUMNAS_CLIENTE = ['wa_id', 'telefono', 'nombre', 'nombre_perfil', 'segmento', 'empresa', 'ultima_solicitud', 'actualizado_en'];\nconst COLUMNAS_EVENTO = ['mensaje_id', 'fecha', 'wa_id', 'conversacion_id', 'direccion', 'tipo', 'texto', 'media_id', 'resultado', 'estado_entrega', 'detalle'];\n\n// Orden de las preguntas por camino. El siguiente paso es siempre el primer campo vacío,\n// así los datos válidos se conservan si el cliente cambia de camino o corrige algo.\nconst SECUENCIAS = {\n  EMPRESA: ['empresa', 'nombre', 'ocasion', 'producto_id', 'cantidad', 'personalizacion', 'fecha_deseada', 'direccion', 'horario_entrega'],\n  PERSONA: ['producto_id', 'cantidad', 'personalizacion', 'fecha_deseada', 'nombre', 'direccion', 'horario_entrega'],\n};\nconst PASO_DE_CAMPO = {\n  empresa: 'P_EMPRESA', nombre: 'P_NOMBRE', ocasion: 'P_OCASION', producto_id: 'P_PRODUCTO', cantidad: 'P_CANTIDAD',\n  personalizacion: 'P_PERSONALIZACION', fecha_deseada: 'P_FECHA', direccion: 'P_DIRECCION', horario_entrega: 'P_HORARIO',\n};\nconst CAMPO_DE_PASO = {};\nfor (const campo of Object.keys(PASO_DE_CAMPO)) CAMPO_DE_PASO[PASO_DE_CAMPO[campo]] = campo;\n\nconst ETIQUETAS = {\n  empresa: 'Empresa', nombre: 'Nombre', ocasion: 'Ocasión', producto_id: 'Producto', cantidad: 'Cantidad',\n  personalizacion: 'Personalización', fecha_deseada: 'Fecha deseada', direccion: 'Dirección de entrega',\n  horario_entrega: 'Horario de entrega',\n};\nconst DEPENDIENTES = { producto_id: ['producto_nombre', 'precio_unitario', 'candidatos'], personalizacion: ['logo_media_id'] };\n// Datos del pedido en curso. Empresa y nombre se conservan al cancelar o al reabrir una conversación cerrada.\nconst CAMPOS_PEDIDO = [\n  'ocasion', 'producto_id', 'producto_nombre', 'precio_unitario', 'cantidad', 'personalizacion', 'logo_media_id',\n  'fecha_deseada', 'direccion', 'horario_entrega', 'candidatos',\n];\n\nconst PALABRAS_VACIAS = new Set([\n  'de', 'del', 'la', 'el', 'lo', 'los', 'las', 'un', 'una', 'uno', 'unos', 'unas', 'para', 'con', 'y', 'o', 'en', 'mi',\n  'me', 'te', 'que', 'por', 'favor', 'hola', 'quiero', 'quisiera', 'busco', 'buscando', 'necesito', 'tienen', 'tiene',\n  'tienes', 'hay', 'algo', 'info', 'informacion', 'precio', 'cuanto', 'cuesta', 'madera', 'modelo', 'interesa',\n  'personalizado', 'personalizada', 'ver', 'sobre', 'como', 'al', 'su', 'sus', 'es',\n]);\n// Equivalencias de búsqueda, aplicadas por igual a la consulta y al nombre del producto (ya sin plural).\nconst SINONIMOS = {\n  navidad: 'navideno', navidena: 'navideno', telefono: 'celular', movil: 'celular', cel: 'celular',\n  computadora: 'laptop', pc: 'laptop', queso: 'quesera', parrilla: 'parrillera', parrillero: 'parrillera',\n  asado: 'parrillera', bbq: 'parrillera', foto: 'portarretrato', cuadro: 'portarretrato', retrato: 'portarretrato',\n  marco: 'portarretrato', vela: 'portavela', incienso: 'portaincienso', llav: 'portallav', llavero: 'portallav',\n  bautizo: 'sacramento', bautismo: 'sacramento', comunion: 'sacramento', confirmacion: 'sacramento',\n  matrimonio: 'boda', corcho: 'portacorcho',\n};\nconst MESES = {\n  enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9,\n  octubre: 10, noviembre: 11, diciembre: 12,\n};\nconst NUMEROS_EN_LETRAS = { uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10 };\n\n// ---------- utilidades ----------\n\nfunction str(v) { return v === undefined || v === null ? '' : String(v); }\nfunction recortar(v, max) { const s = str(v); return s.length > (max || MAX_TEXTO) ? s.slice(0, max || MAX_TEXTO) : s; }\nfunction norm(v) { return str(v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim(); }\nfunction palabras(v) { return norm(v).replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean); }\nfunction numero(v) {\n  const s = str(v).trim().replace(',', '.');\n  if (!s) return null;\n  const n = Number(s);\n  return Number.isFinite(n) && n >= 0 ? n : null;\n}\nfunction entero(v) { const n = numero(v); return n === null ? null : Math.floor(n); }\nfunction dinero(n) {\n  const [e, d] = Number(n).toFixed(2).split('.');\n  return 'S/ ' + e.replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',') + '.' + d;\n}\nfunction fechaLocal(iso) {\n  const partes = new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_HORARIA, year: 'numeric', month: '2-digit', day: '2-digit' })\n    .formatToParts(new Date(iso));\n  const p = t => partes.find(x => x.type === t).value;\n  return `${p('year')}-${p('month')}-${p('day')}`;\n}\nfunction construirFecha(y, m, d) {\n  const t = new Date(Date.UTC(y, m - 1, d));\n  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== m - 1 || t.getUTCDate() !== d) return null;\n  return t.toISOString().slice(0, 10);\n}\nfunction sumarDias(ymd, dias) {\n  const [y, m, d] = ymd.split('-').map(Number);\n  return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10);\n}\nfunction fechaVisible(v) { return /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}` : v; }\nfunction precioTexto(precio) { return precio === null || precio === undefined || precio === '' ? 'precio a confirmar' : dinero(precio); }\n\n// ---------- catálogo ----------\n\nfunction claveInterna(v) { return norm(v).replace(/\\s+/g, ' '); }\n\n// Stock de la pestaña INVENTARIO del equipo (cabecera \"ITEM \" / \"UNIDADES \").\n// Número = unidades; \"SIN STOCK\" = 0; \"DESCONTINUADO\" = el bot no ofrece el producto; vacío = no informado.\nfunction leerInventario(filas) {\n  const inventario = {};\n  for (const f of filas || []) {\n    const valores = {};\n    for (const k of Object.keys(f || {})) valores[norm(k)] = f[k];\n    const item = claveInterna(valores.item);\n    if (!item) continue;\n    const unidades = norm(valores.unidades);\n    if (unidades === 'descontinuado') inventario[item] = { descontinuado: true, stock: null };\n    else if (unidades === 'sin stock') inventario[item] = { descontinuado: false, stock: 0 };\n    else inventario[item] = { descontinuado: false, stock: entero(valores.unidades) };\n  }\n  return inventario;\n}\n\nfunction leerCatalogo(filas, filasInventario) {\n  const inventario = leerInventario(filasInventario);\n  return (filas || []).map(f => {\n    const nombreInterno = str(f.nombre_interno);\n    const inv = inventario[claveInterna(nombreInterno)];\n    return {\n      id: str(f.id).trim(),\n      nombre: str(f.nombre).trim(),\n      nombre_interno: nombreInterno,\n      precio: numero(f.precio_unitario_web_S !== undefined ? f.precio_unitario_web_S : f.precio),\n      // Si el producto está en INVENTARIO manda su stock; si no, el de la propia fila del catálogo.\n      stock: inv ? inv.stock : entero(f.stock),\n      minimo: entero(f.minimo),\n      activo: norm(f.activo) !== 'no' && !(inv && inv.descontinuado),\n    };\n  }).filter(p => p.id && p.nombre && p.activo);\n}\n\nfunction raiz(t) {\n  if (t.length > 5 && t.endsWith('es')) t = t.slice(0, -2);\n  else if (t.length > 3 && t.endsWith('s')) t = t.slice(0, -1);\n  return SINONIMOS[t] || t;\n}\n\nfunction buscarProductos(consulta, productos) {\n  const q = palabras(consulta).filter(t => !PALABRAS_VACIAS.has(t)).map(raiz);\n  if (!q.length) return [];\n  let mejor = 0;\n  const puntuados = [];\n  for (const p of productos) {\n    const nombre = palabras(p.nombre).map(raiz);\n    const puntos = q.filter(t => nombre.some(n => n === t || (t.length >= 4 && n.includes(t)) || (n.length >= 4 && t.startsWith(n)))).length;\n    if (puntos > 0) { puntuados.push({ p, puntos }); mejor = Math.max(mejor, puntos); }\n  }\n  return puntuados.filter(x => x.puntos === mejor).map(x => x.p);\n}\n\nfunction productoDe(conv, ctx) {\n  const p = ctx.productos.find(x => x.id === conv.producto_id);\n  if (p) return p;\n  if (!conv.producto_id) return null;\n  return { id: conv.producto_id, nombre: conv.producto_nombre, precio: numero(conv.precio_unitario), stock: null, minimo: null };\n}\n\nfunction leerCandidatos(conv) {\n  try { const v = JSON.parse(conv.candidatos || '[]'); return Array.isArray(v) ? v.map(str) : []; } catch (e) { return []; }\n}\n\n// ---------- intención de compra ----------\n// Reglas, sin IA: suma por cada dato que el cliente ya definió y por frases de compra; resta si dice que solo\n// está mirando. ALTA >= 60, MEDIA >= 30, BAJA < 30. Las BAJA no generan prospecto en PAUTAS.\n\nconst PUNTOS_INTENCION = {\n  producto: 20, cantidad: 15, volumen: 10, fecha: 10, fecha_cercana: 10, urgente: 20, personalizacion: 5,\n  nombre: 5, direccion: 10, confirmo: 20, compra: 10, explorando: -25,\n};\nconst UMBRAL_ALTA = 60;\nconst UMBRAL_MEDIA = 30;\nconst FRASE_COMPRA = /(quiero|quisiera|deseo|necesito|me gustaria|queremos|necesitamos) (comprar|pedir|encargar|hacer un pedido|cotizar|una cotizacion)|\\bcotizacion\\b|\\bcotizar\\b|hacer un pedido|para (mi|nuestra|la) (empresa|evento|boda)/;\nconst FRASE_EXPLORANDO = /solo (estoy |estamos )?(viendo|mirando|averiguando|consultando|curioseando)|solo (queria|quiero|queriamos) (saber|ver|preguntar)|mas adelante|por ahora no|no por ahora|lo (voy a )?pienso|lo voy a pensar|(despues|luego) (te |les )?(escribo|aviso)/;\n\nfunction leerSenales(conv) { return new Set(str(conv.senales_intencion).split(',').map(s => s.trim()).filter(Boolean)); }\n\n// Actualiza las señales de texto con el mensaje actual. La última intención expresada manda.\nfunction detectarSenales(conv, n) {\n  const senales = leerSenales(conv);\n  if (FRASE_COMPRA.test(n)) { senales.add('compra'); senales.delete('explorando'); }\n  if (FRASE_EXPLORANDO.test(n)) { senales.add('explorando'); senales.delete('compra'); }\n  conv.senales_intencion = [...senales].join(',');\n  return senales;\n}\n\nfunction calcularIntencion(conv, ctx, confirmo) {\n  const senales = leerSenales(conv);\n  const usados = [];\n  const sumar = clave => usados.push(clave);\n  if (str(conv.producto_id)) sumar('producto');\n  const cantidad = entero(conv.cantidad);\n  if (cantidad) sumar('cantidad');\n  if ((cantidad && cantidad >= 12) || conv.segmento === 'EMPRESA') sumar('volumen');\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(conv.fecha_deseada)) {\n    sumar('fecha');\n    if (conv.fecha_deseada <= sumarDias(fechaLocal(ctx.ahoraIso), 45)) sumar('fecha_cercana');\n  } else if (conv.fecha_deseada === 'Lo antes posible') sumar('urgente');\n  if (str(conv.personalizacion) && conv.personalizacion !== 'Sin personalización') sumar('personalizacion');\n  if (str(conv.nombre)) sumar('nombre');\n  if (str(conv.direccion)) sumar('direccion');\n  if (confirmo) sumar('confirmo');\n  if (senales.has('compra')) sumar('compra');\n  if (senales.has('explorando')) sumar('explorando');\n  const puntaje = Math.max(0, Math.min(100, usados.reduce((s, k) => s + PUNTOS_INTENCION[k], 0)));\n  const nivel = puntaje >= UMBRAL_ALTA ? 'ALTA' : puntaje >= UMBRAL_MEDIA ? 'MEDIA' : 'BAJA';\n  conv.intencion = nivel;\n  conv.puntaje_intencion = String(puntaje);\n  return { nivel, puntaje, senales: usados };\n}\n\n// ---------- prioridad del lead ----------\n// Por cantidad, valor y ganancia (sección 4 del plan). El costo sale de BOT_PRODUCTOS (la hoja fuente del negocio);\n// sin costo se usa margen_por_defecto. Cada parte se normaliza contra un tope de BOT_CONFIG y se recorta a 1:\n//   puntaje = (0.45·ganancia + 0.35·valor + 0.20·cantidad) × 100;  ALTA ≥ umbral_alta, MEDIA ≥ umbral_media.\n\nconst PESOS_PRIORIDAD = { ganancia: 0.45, valor: 0.35, cantidad: 0.20 };\n\nfunction costoDe(conv, ctx) {\n  const fila = ctx.productosFuente.find(p => str(p.sku).trim() === conv.producto_id)\n    || ctx.productosFuente.find(p => norm(p.nombre) && norm(p.nombre) === norm(conv.producto_nombre));\n  return fila ? numero(fila.costo) : null;\n}\n\nfunction calcularPrioridad(conv, ctx) {\n  const c = ctx.config;\n  const cfg = clave => CONFIG_BOT.numeroConfig(c, clave);\n  const precio = numero(conv.precio_unitario);\n  const cantidad = entero(conv.cantidad) || 0;\n  const costo = costoDe(conv, ctx);\n  const valor = precio === null ? 0 : precio * cantidad;\n  const unitaria = precio === null ? 0 : costo !== null ? Math.max(0, precio - costo) : precio * cfg('margen_por_defecto');\n  const ganancia = unitaria * cantidad;\n  const parte = (v, tope) => (tope > 0 ? Math.min(1, Math.max(0, v / tope)) : 0);\n  const puntaje = Math.round(100 * (\n    PESOS_PRIORIDAD.ganancia * parte(ganancia, cfg('tope_ganancia'))\n    + PESOS_PRIORIDAD.valor * parte(valor, cfg('tope_valor'))\n    + PESOS_PRIORIDAD.cantidad * parte(cantidad, cfg('tope_cantidad'))));\n  const nivel = puntaje >= cfg('umbral_prioridad_alta') ? 'ALTA' : puntaje >= cfg('umbral_prioridad_media') ? 'MEDIA' : 'BAJA';\n  const redondeo = n => Math.round(n * 100) / 100;\n  return { nivel, puntaje, valor: redondeo(valor), ganancia: redondeo(ganancia), con_costo: costo !== null };\n}\n\n// ---------- textos ----------\n\nfunction menu() {\n  return [\n    '¿Qué tipo de pedido quieres hacer?',\n    '1️⃣ Para una empresa (regalos corporativos o por volumen)',\n    '2️⃣ Personal (un regalo o algo para ti)',\n    '3️⃣ Hablar con una persona del equipo',\n    '',\n    'Responde con el número. En cualquier momento puedes escribir ASESOR para hablar con una persona.',\n  ].join('\\n');\n}\n\nfunction negocio(ctx) { return ctx.config.nombre_negocio; }\n\n// Conversación nueva: bienvenida con la redirección a la web (BOT_CONFIG.mensaje_bienvenida).\nfunction bienvenida(conv, ctx) { return CONFIG_BOT.mensajeBienvenida(ctx.config, conv.nombre); }\n\n// Conversación existente que vuelve al bot: saludo corto, sin repetir la promoción de la web.\nfunction saludo(conv, ctx) {\n  const hola = conv.nombre ? `¡Hola de nuevo, ${conv.nombre}! 👋` : '¡Hola! 👋';\n  return CONFIG_BOT.render('{hola} Soy {nombre_bot} {emoji_bot}, el asistente de {nombre_negocio}. Te ayudo a armar tu pedido y se lo paso al equipo.', { ...ctx.config, hola });\n}\n\nfunction pregunta(campo, conv, ctx) {\n  switch (campo) {\n    case 'empresa': return '¿Cuál es el nombre de tu empresa?';\n    case 'nombre': return conv.segmento === 'EMPRESA' ? '¿Con quién tengo el gusto? Escríbeme el nombre de la persona de contacto.' : '¿Cuál es tu nombre?';\n    case 'ocasion': return '¿Para qué ocasión son los regalos? Por ejemplo: fin de año, aniversario, bienvenida de colaboradores o un evento.';\n    case 'producto_id': return '¿Qué producto te interesa? Escríbelo con tus palabras, por ejemplo: tabla quesera, tabla parrillera, posataza, mesa picnic, portarretrato o recuerdos para sacramentos.';\n    case 'cantidad': {\n      const p = productoDe(conv, ctx);\n      return `¿Cuántas unidades${p ? ` de ${p.nombre}` : ''} necesitas? Escribe la cantidad exacta (por ejemplo: 60).`;\n    }\n    case 'personalizacion': return '¿Quieres personalizarlo con un nombre, frase o logo? Escribe NO o cuéntame qué te gustaría. Si es un logo, puedes enviarlo como imagen.';\n    case 'fecha_deseada': return '¿Para qué fecha lo necesitas? Escríbela como día/mes/año (por ejemplo: 20/12/2026). Si aún no tienes fecha, escribe SIN FECHA.';\n    case 'direccion': return '¿A qué dirección y distrito sería la entrega?';\n    case 'horario_entrega': return '¿En qué horario se puede recibir el pedido? Por ejemplo: lunes a viernes de 9 a. m. a 6 p. m.';\n    default: return '';\n  }\n}\n\nfunction preguntaActual(conv, ctx) {\n  if (conv.paso === 'RESUMEN') return opcionesResumen();\n  if (conv.paso === 'CORREGIR') return opcionesCorregir(conv);\n  const campo = CAMPO_DE_PASO[conv.paso];\n  return campo ? pregunta(campo, conv, ctx) : menu();\n}\n\nfunction totalReferencial(conv) {\n  const precio = numero(conv.precio_unitario);\n  const cantidad = entero(conv.cantidad);\n  return precio !== null && cantidad ? Math.round(precio * cantidad * 100) / 100 : null;\n}\n\nfunction valorVisible(campo, conv) {\n  const v = str(conv[campo]);\n  if (campo === 'producto_id') return v ? `${conv.producto_nombre} (${precioTexto(numero(conv.precio_unitario))} c/u)` : '';\n  if (campo === 'fecha_deseada') return v ? `${fechaVisible(v)} (por confirmar)` : '';\n  return v;\n}\n\nfunction opcionesResumen() {\n  return '1️⃣ Confirmar y enviar al equipo\\n2️⃣ Corregir un dato\\n3️⃣ Cancelar';\n}\n\nfunction resumenCliente(conv, ctx) {\n  const lineas = ['📋 Resumen de tu solicitud', `• Tipo: ${conv.segmento === 'EMPRESA' ? 'Empresa' : 'Personal'}`];\n  for (const campo of SECUENCIAS[conv.segmento]) {\n    lineas.push(`• ${ETIQUETAS[campo]}: ${valorVisible(campo, conv)}`);\n    if (campo === 'cantidad') {\n      const total = totalReferencial(conv);\n      lineas.push(`• Total referencial: ${total === null ? 'a confirmar' : dinero(total)}`);\n    }\n  }\n  lineas.push('');\n  lineas.push(`El total es referencial y se calcula con el precio web. El precio final (personalización, volumen y envío), la fecha y la disponibilidad las confirma el equipo de ${negocio(ctx)}.`);\n  lineas.push('');\n  lineas.push(opcionesResumen());\n  return lineas.join('\\n');\n}\n\nfunction opcionesCorregir(conv) {\n  const campos = SECUENCIAS[conv.segmento] || [];\n  return ['¿Qué dato quieres corregir?', ...campos.map((c, i) => `${i + 1}. ${ETIQUETAS[c]}`), '', 'Escribe el número o VOLVER para ver el resumen.'].join('\\n');\n}\n\nfunction resumenInterno(conv, motivo, textoCliente) {\n  const partes = [`[${conv.segmento || 'SIN_SEGMENTO'}]`];\n  for (const campo of SECUENCIAS[conv.segmento] || ['nombre', 'empresa']) {\n    if (str(conv[campo])) partes.push(`${ETIQUETAS[campo]}: ${valorVisible(campo, conv)}`);\n  }\n  const total = totalReferencial(conv);\n  if (total !== null) partes.push(`Total ref.: ${dinero(total)}`);\n  partes.push(`Motivo: ${motivo}`);\n  if (textoCliente && motivo !== 'SOLICITUD_COMPLETA') partes.push(`Último mensaje: ${recortar(textoCliente, 300)}`);\n  return partes.join(' | ');\n}\n\n// ---------- validaciones por campo ----------\n// Cada una devuelve {ok:true, cambios, nota}, {ok:false, error} o {pendiente:true, respuesta, cambios}.\n\nfunction validarTextoLibre(t, min, max, error) {\n  if (t.length < min || !/[a-z0-9]/i.test(norm(t))) return { ok: false, error };\n  return { ok: true, valor: recortar(t, max) };\n}\n\nconst VALIDAR = {\n  empresa(t) {\n    const r = validarTextoLibre(t, 2, 150, 'No logré leer el nombre de la empresa.');\n    return r.ok ? { ok: true, cambios: { empresa: r.valor } } : r;\n  },\n\n  nombre(t) {\n    if (!/[a-zñ]/.test(norm(t)) || t.length < 2 || t.length > 80) return { ok: false, error: 'No logré leer el nombre.' };\n    return { ok: true, cambios: { nombre: t } };\n  },\n\n  ocasion(t) {\n    const r = validarTextoLibre(t, 2, 200, 'No logré leer la ocasión.');\n    return r.ok ? { ok: true, cambios: { ocasion: r.valor } } : r;\n  },\n\n  producto_id(t, n, m, conv, ctx) {\n    const candidatos = leerCandidatos(conv);\n    let elegido = null;\n    if (/^\\d{1,2}$/.test(n) && candidatos.length) {\n      const i = parseInt(n, 10) - 1;\n      if (i >= 0 && i < candidatos.length) elegido = ctx.productos.find(p => p.id === candidatos[i]) || null;\n      if (!elegido) return { ok: false, error: `Elige un número entre 1 y ${candidatos.length}, o escribe otra palabra para buscar.` };\n    }\n    if (!elegido) elegido = ctx.productos.find(p => p.id.toLowerCase() === n) || null;\n    if (elegido) {\n      return {\n        ok: true,\n        cambios: { producto_id: elegido.id, producto_nombre: elegido.nombre, precio_unitario: elegido.precio === null ? '' : String(elegido.precio), candidatos: '' },\n        nota: `Elegiste ${elegido.nombre} (${precioTexto(elegido.precio)} c/u, precio web referencial).`,\n      };\n    }\n    const encontrados = buscarProductos(t, ctx.productos);\n    if (!encontrados.length) {\n      return { ok: false, error: 'No encontré productos con esa descripción. Prueba con otra palabra (por ejemplo: tabla, posataza, mesa, portarretrato, box) o escribe ASESOR.' };\n    }\n    const lista = encontrados.slice(0, MAX_CANDIDATOS);\n    const lineas = ['Encontré estas opciones:', ...lista.map((p, i) => `${i + 1}. ${p.nombre} — ${precioTexto(p.precio)}`), ''];\n    if (encontrados.length > MAX_CANDIDATOS) lineas.push(`Hay ${encontrados.length} coincidencias; si no ves la tuya, escribe algo más específico.`);\n    lineas.push('Responde con el número del producto o escribe otra palabra para buscar.');\n    return { pendiente: true, respuesta: lineas.join('\\n'), cambios: { candidatos: JSON.stringify(lista.map(p => p.id)) } };\n  },\n\n  cantidad(t, n, m, conv, ctx) {\n    const s = n.replace(/(\\d)[.,](\\d{3})(?!\\d)/g, '$1$2');\n    const exacta = 'Necesito la cantidad exacta para cotizar, por ejemplo: 60 (no \"50 o más\").';\n    if (/\\d\\s*\\+|\\+\\s*\\d|mas de|menos de|o mas|aprox|alrededor|entre |unos |unas |como |hasta /.test(s + ' ')) return { ok: false, error: exacta };\n    const numeros = s.match(/\\d+/g) || [];\n    let c = null;\n    if (/docena/.test(s)) c = /media docena/.test(s) ? 6 : 12 * (numeros.length === 1 ? parseInt(numeros[0], 10) : 1);\n    else if (numeros.length === 1) c = parseInt(numeros[0], 10);\n    else if (!numeros.length) {\n      const enLetras = palabras(s).map(w => NUMEROS_EN_LETRAS[w]).filter(Boolean);\n      if (enLetras.length === 1) c = enLetras[0];\n    }\n    if (c === null) return { ok: false, error: exacta };\n    if (c < 1 || c > 100000) return { ok: false, error: 'Escribe una cantidad entre 1 y 100000.' };\n    const p = productoDe(conv, ctx);\n    if (p && p.minimo && c < p.minimo) return { ok: false, error: `El mínimo para ${p.nombre} es de ${p.minimo} unidades.` };\n    let nota = '';\n    if (p && p.stock !== null && c > p.stock) {\n      nota = p.stock > 0\n        ? `Hoy hay ${p.stock} unidad(es) en stock; el resto depende de producción y el equipo confirmará el plazo.`\n        : 'Hoy no hay unidades en stock: se fabrica a pedido y el equipo confirmará el plazo.';\n    }\n    return { ok: true, cambios: { cantidad: String(c) }, nota };\n  },\n\n  personalizacion(t, n, m) {\n    const nota = 'Anotado. La personalización queda registrada como solicitud: el equipo confirmará si es posible y su costo.';\n    if ((m.tipo === 'image' || m.tipo === 'document') && m.media_id) {\n      return {\n        ok: true,\n        cambios: { logo_media_id: str(m.media_id), personalizacion: `Imagen/logo enviado${t ? `: ${recortar(t, 400)}` : ''}` },\n        nota: `Recibí la imagen 👍 ${nota.replace('Anotado. ', '')}`,\n      };\n    }\n    if (/^(no|nop|ninguna|ninguno|nada|sin|sin personalizacion|no gracias|no, gracias|no deseo|no quiero)$/.test(n)) {\n      return { ok: true, cambios: { personalizacion: 'Sin personalización', logo_media_id: '' } };\n    }\n    const r = validarTextoLibre(t, 2, 500, 'No logré leer la personalización.');\n    return r.ok ? { ok: true, cambios: { personalizacion: r.valor }, nota } : r;\n  },\n\n  fecha_deseada(t, n, m, conv, ctx) {\n    if (/^(sin fecha|no se|no lo se|no tengo( fecha)?|aun no|todavia no|por definir)$/.test(n)) return { ok: true, cambios: { fecha_deseada: 'Sin fecha definida' } };\n    if (/(lo antes posible|cuanto antes|urgente|lo mas pronto)/.test(n)) return { ok: true, cambios: { fecha_deseada: 'Lo antes posible' } };\n    const hoy = fechaLocal(ctx.ahoraIso);\n    const anioActual = parseInt(hoy.slice(0, 4), 10);\n    let fecha = null;\n    let conAnio = true;\n    let g;\n    if (/^pasado manana$/.test(n)) fecha = sumarDias(hoy, 2);\n    else if (/^manana$/.test(n)) fecha = sumarDias(hoy, 1);\n    else if ((g = n.match(/^(\\d{1,2})[/.-](\\d{1,2})(?:[/.-](\\d{2}|\\d{4}))?$/))) {\n      conAnio = !!g[3];\n      const y = g[3] ? (g[3].length === 2 ? 2000 + parseInt(g[3], 10) : parseInt(g[3], 10)) : anioActual;\n      fecha = construirFecha(y, parseInt(g[2], 10), parseInt(g[1], 10));\n    } else if ((g = n.match(/^(?:el )?(\\d{1,2}) de ([a-z]+)(?: (?:de|del) (\\d{4}))?$/)) && MESES[g[2]]) {\n      conAnio = !!g[3];\n      fecha = construirFecha(g[3] ? parseInt(g[3], 10) : anioActual, MESES[g[2]], parseInt(g[1], 10));\n    }\n    if (!fecha) return { ok: false, error: 'No reconocí la fecha. Escríbela como día/mes/año, por ejemplo 20/12/2026.' };\n    if (!conAnio && fecha <= hoy) fecha = construirFecha(parseInt(fecha.slice(0, 4), 10) + 1, parseInt(fecha.slice(5, 7), 10), parseInt(fecha.slice(8, 10), 10));\n    if (!fecha || fecha <= hoy) return { ok: false, error: 'Esa fecha ya pasó o es hoy. Indícame una fecha desde mañana.' };\n    if (fecha > sumarDias(hoy, 730)) return { ok: false, error: 'Esa fecha está muy lejos. Indícame una fecha dentro de los próximos dos años.' };\n    return {\n      ok: true,\n      cambios: { fecha_deseada: fecha },\n      nota: `Anoté el ${fechaVisible(fecha)}. La fecha queda sujeta a confirmación de producción.`,\n    };\n  },\n\n  direccion(t, n, m) {\n    if (m.tipo === 'location' && (m.latitud || m.texto)) {\n      const lugar = [m.texto, m.latitud && m.longitud ? `(${m.latitud}, ${m.longitud})` : ''].filter(Boolean).join(' ');\n      return { ok: true, cambios: { direccion: recortar(`Ubicación compartida: ${lugar}`, 300) } };\n    }\n    const r = validarTextoLibre(t, 5, 300, 'Necesito la dirección con distrito, por ejemplo: Av. Larco 123, Miraflores.');\n    return r.ok ? { ok: true, cambios: { direccion: r.valor } } : r;\n  },\n\n  horario_entrega(t) {\n    const r = validarTextoLibre(t, 3, 200, 'No logré leer el horario.');\n    return r.ok ? { ok: true, cambios: { horario_entrega: r.valor } } : r;\n  },\n};\n\nconst ACEPTA_SIN_TEXTO = { personalizacion: ['image', 'document'], direccion: ['location'] };\n\n// ---------- conversación ----------\n\nfunction idConversacion(waId, ahoraIso) { return `CONV-${waId}-${Date.parse(ahoraIso).toString(36).toUpperCase()}`; }\n\nfunction nuevaConversacion(m, ahoraIso) {\n  return {\n    wa_id: str(m.wa_id), telefono: str(m.telefono || m.wa_id), nombre_perfil: str(m.nombre_perfil),\n    conversacion_id: idConversacion(str(m.wa_id), ahoraIso), modo: MODO.BOT, paso: 'SEGMENTO', intentos: '0', creado_en: ahoraIso,\n  };\n}\n\nfunction copiarFila(fila) {\n  const conv = {};\n  for (const c of COLUMNAS_CONVERSACION) conv[c] = str(fila[c]);\n  return conv;\n}\n\nfunction limpiarPedido(conv) {\n  for (const c of CAMPOS_PEDIDO) conv[c] = '';\n  conv.intentos = '0';\n}\n\nfunction reabrir(conv, ahoraIso) {\n  limpiarPedido(conv);\n  Object.assign(conv, {\n    segmento: '', modo: MODO.BOT, paso: 'SEGMENTO', motivo_derivacion: '', resumen: '', solicitud_id: '',\n    intencion: '', puntaje_intencion: '', senales_intencion: '',\n    conversacion_id: idConversacion(conv.wa_id, ahoraIso), creado_en: ahoraIso,\n  });\n}\n\nfunction pideAsesor(n) {\n  return /\\b(asesor|asesora|asesoria|humano|humana|agente|operador|operadora|vendedor|vendedora|ejecutivo|ejecutiva)\\b/.test(n)\n    || /hablar con (alguien|una persona|un asesor|una asesora|el equipo|la duena|el dueno)/.test(n);\n}\n\nfunction siguienteCampo(conv) {\n  return (SECUENCIAS[conv.segmento] || []).find(c => !str(conv[c]).trim()) || null;\n}\n\nfunction avanzar(conv, ctx, nota) {\n  const prefijo = nota ? `${nota}\\n\\n` : '';\n  const falta = siguienteCampo(conv);\n  conv.intentos = '0';\n  if (!falta) {\n    conv.paso = 'RESUMEN';\n    ctx.respuestas.push(prefijo + resumenCliente(conv, ctx));\n    return;\n  }\n  conv.paso = PASO_DE_CAMPO[falta];\n  ctx.respuestas.push(prefijo + pregunta(falta, conv, ctx));\n}\n\nfunction fallo(conv, ctx, error, textoCliente) {\n  const intentos = (parseInt(conv.intentos, 10) || 0) + 1;\n  conv.intentos = String(intentos);\n  if (intentos >= MAX_INTENTOS) { derivar(conv, ctx, 'NO_ENTENDIDO', textoCliente); return; }\n  ctx.respuestas.push(`${error}\\n\\n${preguntaActual(conv, ctx)}`);\n}\n\nfunction crearSolicitud(conv, ctx, motivo, textoCliente, prioridad) {\n  const hoy = fechaLocal(ctx.ahoraIso).replace(/-/g, '');\n  const sufijo = Date.parse(ctx.ahoraIso).toString(36).toUpperCase().slice(-4);\n  const precio = numero(conv.precio_unitario);\n  const cantidad = entero(conv.cantidad);\n  const total = totalReferencial(conv);\n  return {\n    solicitud_id: `SOL-${hoy}-${conv.wa_id.slice(-4)}-${sufijo}`,\n    fecha_registro: ctx.ahoraIso,\n    wa_id: conv.wa_id,\n    telefono: conv.telefono,\n    conversacion_id: conv.conversacion_id,\n    segmento: conv.segmento,\n    empresa: conv.empresa,\n    nombre: conv.nombre,\n    ocasion: conv.ocasion,\n    producto_id: conv.producto_id,\n    producto_nombre: conv.producto_nombre,\n    precio_unitario_ref: precio === null ? '' : precio,\n    cantidad: cantidad === null ? '' : cantidad,\n    total_referencial: total === null ? '' : total,\n    personalizacion: conv.personalizacion,\n    logo_media_id: conv.logo_media_id,\n    fecha_deseada: conv.fecha_deseada,\n    fecha_confirmada: 'PENDIENTE',\n    direccion: conv.direccion,\n    horario_entrega: conv.horario_entrega,\n    motivo,\n    // Las derivaciones ALTA se marcan con 🔴 para que el equipo las vea primero.\n    resumen: `${prioridad.nivel === 'ALTA' ? '🔴 ' : ''}${resumenInterno(conv, motivo, textoCliente)}`,\n    estado: MODO.PENDIENTE,\n    intencion: conv.intencion,\n    puntaje_intencion: entero(conv.puntaje_intencion) === null ? '' : entero(conv.puntaje_intencion),\n    valor_estimado: prioridad.valor,\n    ganancia_estimada: prioridad.ganancia,\n    prioridad: prioridad.nivel,\n    puntaje_prioridad: prioridad.puntaje,\n  };\n}\n\n// Aviso inmediato al negocio por un lead ALTA (sección 6 del plan).\nfunction avisoLeadAlta(conv, ctx, solicitud, prioridad) {\n  const cliente = conv.empresa ? `${conv.empresa}${conv.nombre ? ` (${conv.nombre})` : ''}` : conv.nombre || conv.nombre_perfil || 'Cliente';\n  return [\n    `🔴 Lead ALTA ${negocio(ctx)} (${prioridad.puntaje}/100)`,\n    `Cliente: ${cliente} · +${conv.wa_id}`,\n    `Producto: ${conv.producto_nombre || 'por definir'} × ${conv.cantidad || '?'}`,\n    `Valor estimado: ${dinero(prioridad.valor)} · Ganancia estimada: ${dinero(prioridad.ganancia)}${prioridad.con_costo ? '' : ' (margen por defecto)'}`,\n    `Solicitud: ${solicitud.solicitud_id}`,\n    `Conversación: https://wa.me/${conv.wa_id}`,\n    'Tómalo en el formulario de atención humana.',\n  ].join('\\n');\n}\n\n// PAUTAS se escribe con USER_ENTERED para que las fechas queden como fechas, igual que las que llena el equipo.\n// Por eso todo texto del cliente que Sheets podría leer como fórmula o número se antepone con un apóstrofo.\nfunction textoLiteral(v) {\n  const s = str(v);\n  return /^[=+\\-@']/.test(s) || /^\\d[\\d\\s/.-]*$/.test(s) ? `'${s}` : s;\n}\n\nfunction numeroLocal(waId) { return /^51\\d{9}$/.test(waId) ? waId.slice(2) : waId; }\n\n// =DATE() da una fecha real que Sheets muestra con el formato regional (d/M/yyyy), igual que las filas del equipo.\nfunction formulaFecha(ymd) { const [y, m, d] = ymd.split('-').map(Number); return `=DATE(${y},${m},${d})`; }\n// Misma regla que la fórmula del equipo en PROXIMO SEGUIMIENTO (=IF(I2=\"\",\"\",I2+2)), sin depender del número de fila.\nconst FORMULA_SEGUIMIENTO = '=IF(INDIRECT(\"I\"&ROW())=\"\",\"\",INDIRECT(\"I\"&ROW())+2)';\n\nfunction crearPauta(conv, ctx) {\n  const hoy = formulaFecha(fechaLocal(ctx.ahoraIso));\n  const p = productoDe(conv, ctx);\n  const cliente = conv.empresa\n    ? `${conv.empresa}${conv.nombre ? ` (${conv.nombre})` : ''}`\n    : conv.nombre || conv.nombre_perfil || `WhatsApp ${conv.wa_id}`;\n  const cantidad = entero(conv.cantidad);\n  return {\n    'FECHA MENSAJE': hoy,\n    CLIENTE: textoLiteral(cliente),\n    NUMERO: textoLiteral(numeroLocal(conv.wa_id)),\n    CELEBRACION: textoLiteral(conv.ocasion),\n    // La columna del equipo es texto (\"NOVIEMBRE\"...): la fecha va como texto dd/mm/aaaa.\n    'FECHA EVENTO': textoLiteral(fechaVisible(conv.fecha_deseada)),\n    // El nombre interno coincide con la lista de NOMBRES que valida la columna; si falta, va el nombre web.\n    'LISTADO DE PRODUCTOS ': textoLiteral(p ? (p.nombre_interno || p.nombre) : ''),\n    CANTIDAD: cantidad === null ? '' : cantidad,\n    ESTADO: '',\n    'ULTIMO CONTACTO': hoy,\n    'PROXIMO SEGUIMIENTO': FORMULA_SEGUIMIENTO,\n    'MOTIVO DE PERDIDA': '',\n  };\n}\n\nfunction derivar(conv, ctx, motivo, textoCliente) {\n  const intencion = calcularIntencion(conv, ctx, motivo === 'SOLICITUD_COMPLETA');\n  const prioridad = calcularPrioridad(conv, ctx);\n  const solicitud = crearSolicitud(conv, ctx, motivo, textoCliente, prioridad);\n  ctx.solicitud = solicitud;\n  ctx.cliente = {\n    wa_id: conv.wa_id, telefono: conv.telefono, nombre: conv.nombre, nombre_perfil: conv.nombre_perfil,\n    segmento: conv.segmento, empresa: conv.empresa, ultima_solicitud: solicitud.solicitud_id, actualizado_en: ctx.ahoraIso,\n  };\n  Object.assign(conv, {\n    modo: MODO.PENDIENTE, paso: 'DERIVADO', intentos: '0', candidatos: '',\n    motivo_derivacion: motivo, resumen: solicitud.resumen, solicitud_id: solicitud.solicitud_id,\n  });\n\n  // Prioridad BAJA en un pedido completo: el bot lo cierra con la web y el descuento (si hay web configurada).\n  // Si el cliente pidió una persona o el bot no le entendió, se deriva igual.\n  const web = CONFIG_BOT.fraseWeb(ctx.config);\n  if (prioridad.nivel === 'BAJA' && motivo === 'SOLICITUD_COMPLETA' && web) {\n    solicitud.estado = 'CERRADO_WEB';\n    Object.assign(conv, { modo: MODO.CERRADO, paso: 'CERRADO_WEB' });\n    ctx.pauta = null;\n    ctx.respuestas.push(`¡Listo! Registré tu solicitud ${solicitud.solicitud_id} ✅\\n\\nPara un pedido así, lo más rápido es comprar en nuestra web: ${web}\\n\\nSi prefieres que una persona del equipo te atienda, escribe ASESOR.`);\n    return;\n  }\n\n  // Filtro por intención: una BAJA se atiende igual (queda en BOT_SOLICITUDES), pero no entra a PAUTAS.\n  ctx.pauta = intencion.nivel === 'BAJA' ? null : crearPauta(conv, ctx);\n  ctx.aviso = prioridad.nivel === 'ALTA' ? avisoLeadAlta(conv, ctx, solicitud, prioridad) : [\n    `🔔 Nueva atención ${negocio(ctx)}`,\n    `Cliente: +${conv.wa_id}${conv.nombre || conv.nombre_perfil ? ` (${conv.nombre || conv.nombre_perfil})` : ''}`,\n    `Solicitud: ${solicitud.solicitud_id}`,\n    `Intención de compra: ${intencion.nivel} (${intencion.puntaje}/100) · Prioridad: ${prioridad.nivel} (${prioridad.puntaje}/100)`,\n    solicitud.resumen,\n    'Toma el caso en el formulario de atención humana para responder.',\n  ].join('\\n');\n  if (motivo === 'SOLICITUD_COMPLETA') {\n    ctx.respuestas.push(`¡Listo! Registré tu solicitud ${solicitud.solicitud_id} ✅\\n\\nUna persona del equipo de ${negocio(ctx)} te escribirá por este mismo chat para confirmar el precio final, la fecha y la forma de pago.`);\n  } else if (motivo === 'NO_ENTENDIDO') {\n    ctx.respuestas.push(`Parece que no te estoy entendiendo bien 🙈 Le pasé lo que conversamos a una persona del equipo de ${negocio(ctx)}; te escribirá por este mismo chat.`);\n  } else {\n    ctx.respuestas.push(`Te comunico con una persona del equipo de ${negocio(ctx)}. Le dejé el resumen de lo que conversamos y te escribirá por este mismo chat.`);\n  }\n}\n\nfunction elegirSegmento(conv, ctx, n, t) {\n  let segmento = null;\n  if (n === '1' || /empresa|corporativ|negocio|colaborador|trabajador/.test(n)) segmento = 'EMPRESA';\n  else if (n === '2' || /personal|para mi|regalo|persona\\b/.test(n)) segmento = 'PERSONA';\n  else if (n === '3') { derivar(conv, ctx, 'SOLICITUD_CLIENTE', t); return; }\n  if (!segmento) { fallo(conv, ctx, 'Elige una opción con su número: 1, 2 o 3.', t); return; }\n  conv.segmento = segmento;\n  avanzar(conv, ctx, segmento === 'EMPRESA' ? '¡Genial! Te ayudo con un pedido para empresa.' : '¡Genial! Te ayudo con tu pedido.');\n}\n\nfunction responderResumen(conv, ctx, n, t) {\n  if (/^(1|si|confirmar|confirmo|ok|dale|listo|correcto|de acuerdo|si,? confirmo)$/.test(n)) { derivar(conv, ctx, 'SOLICITUD_COMPLETA', t); return; }\n  if (/^(2|no|corregir|cambiar|modificar)$/.test(n)) { conv.paso = 'CORREGIR'; conv.intentos = '0'; ctx.respuestas.push(opcionesCorregir(conv)); return; }\n  if (n === '3') { cancelar(conv, ctx); return; }\n  fallo(conv, ctx, 'Responde 1, 2 o 3.', t);\n}\n\nfunction responderCorregir(conv, ctx, n, t) {\n  if (n === 'volver') { avanzar(conv, ctx); return; }\n  const campos = SECUENCIAS[conv.segmento] || [];\n  const i = /^\\d{1,2}$/.test(n) ? parseInt(n, 10) - 1 : -1;\n  if (i < 0 || i >= campos.length) { fallo(conv, ctx, `Elige un número entre 1 y ${campos.length}.`, t); return; }\n  const campo = campos[i];\n  conv[campo] = '';\n  for (const d of DEPENDIENTES[campo] || []) conv[d] = '';\n  conv.paso = PASO_DE_CAMPO[campo];\n  conv.intentos = '0';\n  ctx.respuestas.push(pregunta(campo, conv, ctx));\n}\n\nfunction cancelar(conv, ctx) {\n  limpiarPedido(conv);\n  conv.paso = 'SEGMENTO';\n  ctx.respuestas.push(`Listo, cancelé la solicitud en curso.\\n\\n${menu()}`);\n}\n\nfunction responderCampo(conv, ctx, campo, t, n) {\n  const m = ctx.mensaje;\n  if (!SECUENCIAS[conv.segmento]) { conv.paso = 'SEGMENTO'; ctx.respuestas.push(menu()); return; }\n  if (!t && !(ACEPTA_SIN_TEXTO[campo] || []).includes(m.tipo)) {\n    const aviso = m.tipo === 'image' ? 'Recibí tu imagen y queda registrada para el equipo.' : 'Por ahora solo puedo leer mensajes de texto.';\n    ctx.respuestas.push(`${aviso}\\n\\n${pregunta(campo, conv, ctx)}`);\n    return;\n  }\n  const r = VALIDAR[campo](t, n, m, conv, ctx);\n  if (r.pendiente) { Object.assign(conv, r.cambios || {}); conv.intentos = '0'; ctx.respuestas.push(r.respuesta); return; }\n  if (!r.ok) { fallo(conv, ctx, r.error, t); return; }\n  Object.assign(conv, r.cambios);\n  avanzar(conv, ctx, r.nota);\n}\n\nfunction atender(conv, ctx, esInicio) {\n  const m = ctx.mensaje;\n  const t = recortar(str(m.texto).trim());\n  const n = norm(t);\n\n  if (m.tipo === 'reaction') { ctx.resultado = 'IGNORADO'; return; }\n  const senales = n ? detectarSenales(conv, n) : leerSenales(conv);\n  if (n && pideAsesor(n)) { derivar(conv, ctx, 'SOLICITUD_CLIENTE', t); return; }\n  if (esInicio) {\n    conv.paso = 'SEGMENTO';\n    ctx.respuestas.push(`${bienvenida(conv, ctx)}\\n\\n${menu()}`);\n    const url = CONFIG_BOT.urlConUtm(ctx.config);\n    if (url) {\n      // Se registra para medir después qué ventas web vinieron del bot (código y UTM).\n      ctx.eventos.push({\n        mensaje_id: `BIENV-${str(m.mensaje_id)}`, fecha: ctx.ahoraIso, wa_id: conv.wa_id, conversacion_id: conv.conversacion_id,\n        direccion: 'SISTEMA', tipo: 'evento', texto: url, media_id: '', resultado: 'BIENVENIDA_WEB', estado_entrega: '',\n        detalle: str(ctx.config.codigo_descuento_web),\n      });\n    }\n    return;\n  }\n  if (m.tipo === 'audio') {\n    ctx.respuestas.push(`Por ahora no puedo escuchar audios 🙏 ¿Me lo escribes? Si prefieres, escribe ASESOR y te atiende una persona.\\n\\n${preguntaActual(conv, ctx)}`);\n    return;\n  }\n  if (/^(menu|inicio|volver al inicio|reiniciar)$/.test(n)) {\n    conv.paso = 'SEGMENTO';\n    conv.intentos = '0';\n    ctx.respuestas.push(conv.producto_id || conv.nombre ? `Tus datos se conservan.\\n\\n${menu()}` : menu());\n    return;\n  }\n  if (n === 'cancelar') { cancelar(conv, ctx); return; }\n\n  if (conv.paso === 'SEGMENTO' && senales.has('explorando') && FRASE_EXPLORANDO.test(n) && !/^[123]$/.test(n)) {\n    // Solo está mirando: no cuenta como respuesta inválida ni se le insiste.\n    conv.intentos = '0';\n    ctx.respuestas.push(`¡Claro, sin compromiso! Puedes contarme qué producto te interesa cuando quieras y te digo su precio.\\n\\n${menu()}`);\n    return;\n  }\n  if (conv.paso === 'SEGMENTO') return elegirSegmento(conv, ctx, n, t);\n  if (conv.paso === 'RESUMEN') return responderResumen(conv, ctx, n, t);\n  if (conv.paso === 'CORREGIR') return responderCorregir(conv, ctx, n, t);\n  const campo = CAMPO_DE_PASO[conv.paso];\n  if (campo) return responderCampo(conv, ctx, campo, t, n);\n\n  // Paso desconocido o la conversación volvió al bot después de una derivación.\n  conv.paso = 'SEGMENTO';\n  conv.intentos = '0';\n  ctx.respuestas.push(`${saludo(conv, ctx)}\\n\\n${menu()}`);\n}\n\n// config: filas de BOT_CONFIG (o un objeto ya leído). Sin config se usan los valores por defecto.\n// productosFuente: filas de BOT_PRODUCTOS (copia de la hoja del negocio), de donde sale el costo para la prioridad.\nfunction procesar({ mensaje, conversacion, catalogo, inventario, config, productosFuente, ahora }) {\n  const ahoraIso = ahora || new Date().toISOString();\n  const leida = conversacion && str(conversacion.wa_id) ? conversacion : null;\n  const modoLeido = leida ? str(leida.modo).trim().toUpperCase() : '';\n  const ctx = {\n    mensaje, productos: leerCatalogo(catalogo, inventario), ahoraIso, respuestas: [],\n    config: Array.isArray(config) ? CONFIG_BOT.leerConfig(config) : { ...CONFIG_BOT.leerConfig([]), ...(config || {}) },\n    productosFuente: (productosFuente || []).filter(p => p && str(p.sku).trim()),\n    solicitud: null, pauta: null, cliente: null, aviso: null, eventos: [], resultado: 'PROCESADO',\n  };\n\n  const conv = leida ? copiarFila(leida) : nuevaConversacion(mensaje, ahoraIso);\n  conv.ultima_entrada = str(mensaje.fecha_iso) || ahoraIso;\n  if (mensaje.nombre_perfil) conv.nombre_perfil = str(mensaje.nombre_perfil);\n  if (!conv.telefono) conv.telefono = str(mensaje.telefono || mensaje.wa_id);\n\n  let esInicio = !leida;\n  if (leida && modoLeido === MODO.CERRADO) { reabrir(conv, ahoraIso); esInicio = true; }\n  else if (leida && modoLeido !== MODO.BOT && modoLeido !== '') {\n    // PENDIENTE_HUMANO, HUMANO o un valor desconocido: se registra la entrada y el bot no responde.\n    ctx.resultado = 'SIN_RESPUESTA_ATENCION_HUMANA';\n  }\n  if (ctx.resultado === 'PROCESADO') {\n    conv.modo = MODO.BOT;\n    atender(conv, ctx, esInicio);\n    // Al derivar ya se calculó (incluida la confirmación); si no, se recalcula con lo reunido hasta ahora.\n    if (!ctx.solicitud) calcularIntencion(conv, ctx, false);\n  }\n  conv.actualizado_en = ahoraIso;\n\n  const fila = copiarFila(conv);\n  return {\n    wa_id: fila.wa_id,\n    conversacion: fila,\n    modo_leido: modoLeido,\n    respuestas: ctx.respuestas,\n    solicitud: ctx.solicitud,\n    pauta: ctx.pauta,\n    cliente: ctx.cliente,\n    aviso: ctx.aviso,\n    // Destino del aviso según BOT_CONFIG; vacío = el número de avisos de la configuración de n8n.\n    aviso_destino: str(ctx.config.avisos_whatsapp).replace(/\\D/g, ''),\n    // Eventos extra para BOT_EVENTOS (por ahora, BIENVENIDA_WEB).\n    eventos: ctx.eventos,\n    resultado_evento: ctx.resultado,\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    procesar, leerCatalogo, leerInventario, buscarProductos, calcularIntencion, calcularPrioridad, MODO, SECUENCIAS, MAX_TEXTO,\n    COLUMNAS_CONVERSACION, COLUMNAS_EQUIPO_CONVERSACION, COLUMNAS_SOLICITUD, COLUMNAS_CLIENTE, COLUMNAS_EVENTO,\n  };\n}\n\n// ---- n8n ----\nconst mensaje = $('Entrada').first().json;\nconst conversacion = $('Leer conversación').all().map(i => i.json).find(fila => fila && String(fila.wa_id ?? '') === String(mensaje.wa_id)) || null;\nconst catalogo = $('Leer catálogo').all().map(i => i.json);\nconst inventario = $('Leer inventario').all().map(i => i.json);\nconst config = $('Leer configuración').all().map(i => i.json);\nconst productosFuente = $('Leer productos').all().map(i => i.json);\nreturn [{ json: procesar({ mensaje, conversacion, catalogo, inventario, config, productosFuente, ahora: new Date().toISOString() }) }];"
+      },
+      "id": "8608c463-2a50-470a-aaa0-317e26006bd1",
+      "name": "Motor conversacional",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONVERSACIONES",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "wa_id",
+              "lookupValue": "={{ $('Entrada').first().json.wa_id }}"
+            }
+          ]
+        }
+      },
+      "id": "9b67afcc-930c-40f6-a4be-13d5b73d73d4",
+      "name": "Releer conversación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Decisiones del subflujo \"Procesar mensaje\" que rodean al motor: duplicados, cambio de modo y envíos.\n// Se usan tal cual en los nodos Code de n8n y en el simulador local.\n\nfunction s(v) { return v === undefined || v === null ? '' : String(v); }\nfunction modoDe(fila) { return fila ? s(fila.modo).trim().toUpperCase() : ''; }\nfunction filaDe(filas, waId) { return (filas || []).find(f => f && s(f.wa_id) !== '' && s(f.wa_id) === s(waId)) || null; }\n\n// Un evento ya visto se omite salvo que haya quedado en RECIBIDO (falló antes de guardar el estado).\n// Si ya se guardó el estado no se recalcula: así no se repiten preguntas ni envíos.\nfunction esDuplicado(mensaje, filasEventos) {\n  return (filasEventos || []).some(f => f && s(f.mensaje_id) === s(mensaje.mensaje_id) && s(f.resultado) !== '' && s(f.resultado) !== 'RECIBIDO');\n}\n\n// Antes de guardar: si una persona cambió el modo mientras el motor trabajaba, no se pisa su cambio.\nfunction verificarCambioModo(motor, filasConversacion) {\n  const actual = modoDe(filaDe(filasConversacion, motor.wa_id));\n  return { cambio: actual !== s(motor.modo_leido).toUpperCase(), modo_actual: actual };\n}\n\n// Justo antes de enviar: se vuelve a comparar el modo guardado con el que dejó el motor.\nfunction prepararEnvios(motor, mensaje, filasConversacion, phoneNumberId) {\n  const actual = modoDe(filaDe(filasConversacion, motor.wa_id));\n  const esperado = s(motor.conversacion.modo).toUpperCase();\n  return (motor.respuestas || []).map((texto, i) => {\n    const base = {\n      wa_id: motor.wa_id, conversacion_id: motor.conversacion.conversacion_id,\n      en_respuesta_a: mensaje.mensaje_id, orden: i + 1, texto,\n    };\n    if (actual !== esperado) {\n      return { ...base, accion: 'registrar', resultado: 'OMITIDO_CAMBIO_MODO', mensaje_id: `OMIT-${mensaje.mensaje_id}-${i + 1}`, detalle: `modo actual ${actual || '(vacío)'}` };\n    }\n    if (mensaje.origen === 'api') {\n      return { ...base, accion: 'registrar', resultado: 'API', mensaje_id: `API-OUT-${mensaje.mensaje_id}-${i + 1}`, detalle: 'respuesta devuelta por la API' };\n    }\n    if (mensaje.origen === 'simulacion') {\n      return { ...base, accion: 'registrar', resultado: 'SIMULADO', mensaje_id: `SIM-${mensaje.mensaje_id}-${i + 1}`, detalle: 'webhook de simulación: no se envió por WhatsApp' };\n    }\n    return { ...base, accion: 'enviar', to: motor.wa_id, phone_number_id: s(mensaje.phone_number_id) || s(phoneNumberId) };\n  });\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { esDuplicado, verificarCambioModo, prepararEnvios, filaDe };\n\n// ---- n8n ----\nconst motor = $('Motor conversacional').first().json;\nreturn [{ json: verificarCambioModo(motor, $input.all().map(i => i.json)) }];"
+      },
+      "id": "f854dcec-6625-4409-af04-6b30f08dd9a8",
+      "name": "Comparar modo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cfd16a28-71f1-4918-adbe-27807f8c4c4e",
+              "leftValue": "={{ $json.cambio }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e196b8c0-e1d7-47f4-a728-a65fcb7bce23",
+      "name": "¿Cambió el modo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONVERSACIONES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "wa_id": "={{ $('Motor conversacional').first().json.wa_id }}",
+            "ultima_entrada": "={{ $('Motor conversacional').first().json.conversacion.ultima_entrada }}"
+          },
+          "matchingColumns": [
+            "wa_id"
+          ],
+          "schema": [
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ultima_entrada",
+              "displayName": "ultima_entrada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "7bd23982-1dc8-4fd1-a4d7-0d858260653f",
+      "name": "Actualizar última entrada",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $('Entrada').first().json.mensaje_id }}",
+            "resultado": "OMITIDO_CAMBIO_MODO",
+            "detalle": "={{ 'modo cambió a ' + $('Comparar modo').first().json.modo_actual }}"
+          },
+          "matchingColumns": [
+            "mensaje_id"
+          ],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "0e47715c-9dd0-436b-a261-6d8f97176b29",
+      "name": "Marcar entrada omitida",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONVERSACIONES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "wa_id": "={{ $('Motor conversacional').first().json.conversacion[\"wa_id\"] }}",
+            "telefono": "={{ $('Motor conversacional').first().json.conversacion[\"telefono\"] }}",
+            "nombre_perfil": "={{ $('Motor conversacional').first().json.conversacion[\"nombre_perfil\"] }}",
+            "conversacion_id": "={{ $('Motor conversacional').first().json.conversacion[\"conversacion_id\"] }}",
+            "modo": "={{ $('Motor conversacional').first().json.conversacion[\"modo\"] }}",
+            "paso": "={{ $('Motor conversacional').first().json.conversacion[\"paso\"] }}",
+            "segmento": "={{ $('Motor conversacional').first().json.conversacion[\"segmento\"] }}",
+            "empresa": "={{ $('Motor conversacional').first().json.conversacion[\"empresa\"] }}",
+            "nombre": "={{ $('Motor conversacional').first().json.conversacion[\"nombre\"] }}",
+            "ocasion": "={{ $('Motor conversacional').first().json.conversacion[\"ocasion\"] }}",
+            "producto_id": "={{ $('Motor conversacional').first().json.conversacion[\"producto_id\"] }}",
+            "producto_nombre": "={{ $('Motor conversacional').first().json.conversacion[\"producto_nombre\"] }}",
+            "precio_unitario": "={{ $('Motor conversacional').first().json.conversacion[\"precio_unitario\"] }}",
+            "cantidad": "={{ $('Motor conversacional').first().json.conversacion[\"cantidad\"] }}",
+            "personalizacion": "={{ $('Motor conversacional').first().json.conversacion[\"personalizacion\"] }}",
+            "logo_media_id": "={{ $('Motor conversacional').first().json.conversacion[\"logo_media_id\"] }}",
+            "fecha_deseada": "={{ $('Motor conversacional').first().json.conversacion[\"fecha_deseada\"] }}",
+            "direccion": "={{ $('Motor conversacional').first().json.conversacion[\"direccion\"] }}",
+            "horario_entrega": "={{ $('Motor conversacional').first().json.conversacion[\"horario_entrega\"] }}",
+            "candidatos": "={{ $('Motor conversacional').first().json.conversacion[\"candidatos\"] }}",
+            "intentos": "={{ $('Motor conversacional').first().json.conversacion[\"intentos\"] }}",
+            "motivo_derivacion": "={{ $('Motor conversacional').first().json.conversacion[\"motivo_derivacion\"] }}",
+            "resumen": "={{ $('Motor conversacional').first().json.conversacion[\"resumen\"] }}",
+            "solicitud_id": "={{ $('Motor conversacional').first().json.conversacion[\"solicitud_id\"] }}",
+            "ultima_entrada": "={{ $('Motor conversacional').first().json.conversacion[\"ultima_entrada\"] }}",
+            "creado_en": "={{ $('Motor conversacional').first().json.conversacion[\"creado_en\"] }}",
+            "actualizado_en": "={{ $('Motor conversacional').first().json.conversacion[\"actualizado_en\"] }}",
+            "intencion": "={{ $('Motor conversacional').first().json.conversacion[\"intencion\"] }}",
+            "puntaje_intencion": "={{ $('Motor conversacional').first().json.conversacion[\"puntaje_intencion\"] }}",
+            "senales_intencion": "={{ $('Motor conversacional').first().json.conversacion[\"senales_intencion\"] }}"
+          },
+          "matchingColumns": [
+            "wa_id"
+          ],
+          "schema": [
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre_perfil",
+              "displayName": "nombre_perfil",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "modo",
+              "displayName": "modo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "paso",
+              "displayName": "paso",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "segmento",
+              "displayName": "segmento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ocasion",
+              "displayName": "ocasion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "producto_id",
+              "displayName": "producto_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "producto_nombre",
+              "displayName": "producto_nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "precio_unitario",
+              "displayName": "precio_unitario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cantidad",
+              "displayName": "cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "personalizacion",
+              "displayName": "personalizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "logo_media_id",
+              "displayName": "logo_media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_deseada",
+              "displayName": "fecha_deseada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "horario_entrega",
+              "displayName": "horario_entrega",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "candidatos",
+              "displayName": "candidatos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "intentos",
+              "displayName": "intentos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo_derivacion",
+              "displayName": "motivo_derivacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "solicitud_id",
+              "displayName": "solicitud_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ultima_entrada",
+              "displayName": "ultima_entrada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "creado_en",
+              "displayName": "creado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "actualizado_en",
+              "displayName": "actualizado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "intencion",
+              "displayName": "intencion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "puntaje_intencion",
+              "displayName": "puntaje_intencion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "senales_intencion",
+              "displayName": "senales_intencion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "8c550487-3caa-4925-a0a2-625d3ac48bfc",
+      "name": "Guardar conversación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a67e41fd-2ce5-4053-a81f-023c28a12a39",
+              "leftValue": "={{ !!$('Motor conversacional').first().json.solicitud }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b3ffceed-03c2-414e-a81d-58cd0368f7a7",
+      "name": "¿Hay solicitud?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_SOLICITUDES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "solicitud_id": "={{ $('Motor conversacional').first().json.solicitud[\"solicitud_id\"] }}",
+            "fecha_registro": "={{ $('Motor conversacional').first().json.solicitud[\"fecha_registro\"] }}",
+            "wa_id": "={{ $('Motor conversacional').first().json.solicitud[\"wa_id\"] }}",
+            "telefono": "={{ $('Motor conversacional').first().json.solicitud[\"telefono\"] }}",
+            "conversacion_id": "={{ $('Motor conversacional').first().json.solicitud[\"conversacion_id\"] }}",
+            "segmento": "={{ $('Motor conversacional').first().json.solicitud[\"segmento\"] }}",
+            "empresa": "={{ $('Motor conversacional').first().json.solicitud[\"empresa\"] }}",
+            "nombre": "={{ $('Motor conversacional').first().json.solicitud[\"nombre\"] }}",
+            "ocasion": "={{ $('Motor conversacional').first().json.solicitud[\"ocasion\"] }}",
+            "producto_id": "={{ $('Motor conversacional').first().json.solicitud[\"producto_id\"] }}",
+            "producto_nombre": "={{ $('Motor conversacional').first().json.solicitud[\"producto_nombre\"] }}",
+            "precio_unitario_ref": "={{ $('Motor conversacional').first().json.solicitud[\"precio_unitario_ref\"] === '' ? null : $('Motor conversacional').first().json.solicitud[\"precio_unitario_ref\"] }}",
+            "cantidad": "={{ $('Motor conversacional').first().json.solicitud[\"cantidad\"] === '' ? null : $('Motor conversacional').first().json.solicitud[\"cantidad\"] }}",
+            "total_referencial": "={{ $('Motor conversacional').first().json.solicitud[\"total_referencial\"] === '' ? null : $('Motor conversacional').first().json.solicitud[\"total_referencial\"] }}",
+            "personalizacion": "={{ $('Motor conversacional').first().json.solicitud[\"personalizacion\"] }}",
+            "logo_media_id": "={{ $('Motor conversacional').first().json.solicitud[\"logo_media_id\"] }}",
+            "fecha_deseada": "={{ $('Motor conversacional').first().json.solicitud[\"fecha_deseada\"] }}",
+            "fecha_confirmada": "={{ $('Motor conversacional').first().json.solicitud[\"fecha_confirmada\"] }}",
+            "direccion": "={{ $('Motor conversacional').first().json.solicitud[\"direccion\"] }}",
+            "horario_entrega": "={{ $('Motor conversacional').first().json.solicitud[\"horario_entrega\"] }}",
+            "motivo": "={{ $('Motor conversacional').first().json.solicitud[\"motivo\"] }}",
+            "resumen": "={{ $('Motor conversacional').first().json.solicitud[\"resumen\"] }}",
+            "estado": "={{ $('Motor conversacional').first().json.solicitud[\"estado\"] }}",
+            "intencion": "={{ $('Motor conversacional').first().json.solicitud[\"intencion\"] }}",
+            "puntaje_intencion": "={{ $('Motor conversacional').first().json.solicitud[\"puntaje_intencion\"] }}",
+            "valor_estimado": "={{ $('Motor conversacional').first().json.solicitud[\"valor_estimado\"] === '' ? null : $('Motor conversacional').first().json.solicitud[\"valor_estimado\"] }}",
+            "ganancia_estimada": "={{ $('Motor conversacional').first().json.solicitud[\"ganancia_estimada\"] === '' ? null : $('Motor conversacional').first().json.solicitud[\"ganancia_estimada\"] }}",
+            "prioridad": "={{ $('Motor conversacional').first().json.solicitud[\"prioridad\"] }}",
+            "puntaje_prioridad": "={{ $('Motor conversacional').first().json.solicitud[\"puntaje_prioridad\"] === '' ? null : $('Motor conversacional').first().json.solicitud[\"puntaje_prioridad\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "solicitud_id",
+              "displayName": "solicitud_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_registro",
+              "displayName": "fecha_registro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "segmento",
+              "displayName": "segmento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ocasion",
+              "displayName": "ocasion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "producto_id",
+              "displayName": "producto_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "producto_nombre",
+              "displayName": "producto_nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "precio_unitario_ref",
+              "displayName": "precio_unitario_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cantidad",
+              "displayName": "cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_referencial",
+              "displayName": "total_referencial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "personalizacion",
+              "displayName": "personalizacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "logo_media_id",
+              "displayName": "logo_media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_deseada",
+              "displayName": "fecha_deseada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_confirmada",
+              "displayName": "fecha_confirmada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "horario_entrega",
+              "displayName": "horario_entrega",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "intencion",
+              "displayName": "intencion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "puntaje_intencion",
+              "displayName": "puntaje_intencion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "valor_estimado",
+              "displayName": "valor_estimado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ganancia_estimada",
+              "displayName": "ganancia_estimada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "prioridad",
+              "displayName": "prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "puntaje_prioridad",
+              "displayName": "puntaje_prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "fa6e77fc-cd80-4211-a055-6c25b4076f74",
+      "name": "Registrar solicitud",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "74404aff-b5c6-4603-acab-f0d266f82bbf",
+              "leftValue": "={{ !!$('Motor conversacional').first().json.pauta }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "79001c62-285d-48e7-a55c-e1747184ad79",
+      "name": "¿Hay prospecto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "PAUTAS ",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "FECHA MENSAJE": "={{ $('Motor conversacional').first().json.pauta[\"FECHA MENSAJE\"] }}",
+            "CLIENTE": "={{ $('Motor conversacional').first().json.pauta[\"CLIENTE\"] }}",
+            "NUMERO": "={{ $('Motor conversacional').first().json.pauta[\"NUMERO\"] }}",
+            "CELEBRACION": "={{ $('Motor conversacional').first().json.pauta[\"CELEBRACION\"] }}",
+            "FECHA EVENTO": "={{ $('Motor conversacional').first().json.pauta[\"FECHA EVENTO\"] }}",
+            "LISTADO DE PRODUCTOS ": "={{ $('Motor conversacional').first().json.pauta[\"LISTADO DE PRODUCTOS \"] }}",
+            "CANTIDAD": "={{ $('Motor conversacional').first().json.pauta[\"CANTIDAD\"] === '' ? null : $('Motor conversacional').first().json.pauta[\"CANTIDAD\"] }}",
+            "ESTADO": "={{ $('Motor conversacional').first().json.pauta[\"ESTADO\"] }}",
+            "ULTIMO CONTACTO": "={{ $('Motor conversacional').first().json.pauta[\"ULTIMO CONTACTO\"] }}",
+            "PROXIMO SEGUIMIENTO": "={{ $('Motor conversacional').first().json.pauta[\"PROXIMO SEGUIMIENTO\"] }}",
+            "MOTIVO DE PERDIDA": "={{ $('Motor conversacional').first().json.pauta[\"MOTIVO DE PERDIDA\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "FECHA MENSAJE",
+              "displayName": "FECHA MENSAJE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "CLIENTE",
+              "displayName": "CLIENTE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "NUMERO",
+              "displayName": "NUMERO",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "CELEBRACION",
+              "displayName": "CELEBRACION",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "FECHA EVENTO",
+              "displayName": "FECHA EVENTO",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LISTADO DE PRODUCTOS ",
+              "displayName": "LISTADO DE PRODUCTOS ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "CANTIDAD",
+              "displayName": "CANTIDAD",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ESTADO",
+              "displayName": "ESTADO",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ULTIMO CONTACTO",
+              "displayName": "ULTIMO CONTACTO",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "PROXIMO SEGUIMIENTO",
+              "displayName": "PROXIMO SEGUIMIENTO",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "MOTIVO DE PERDIDA",
+              "displayName": "MOTIVO DE PERDIDA",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "2b7074a3-9852-4435-a818-fcae71d5dcb8",
+      "name": "Registrar en PAUTAS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3080,
+        140
+      ],
+      "notes": "Prospecto en la pestaña del equipo. USER_ENTERED para que las fechas queden como fechas."
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CLIENTES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "wa_id": "={{ $('Motor conversacional').first().json.cliente[\"wa_id\"] }}",
+            "telefono": "={{ $('Motor conversacional').first().json.cliente[\"telefono\"] }}",
+            "nombre": "={{ $('Motor conversacional').first().json.cliente[\"nombre\"] }}",
+            "nombre_perfil": "={{ $('Motor conversacional').first().json.cliente[\"nombre_perfil\"] }}",
+            "segmento": "={{ $('Motor conversacional').first().json.cliente[\"segmento\"] }}",
+            "empresa": "={{ $('Motor conversacional').first().json.cliente[\"empresa\"] }}",
+            "ultima_solicitud": "={{ $('Motor conversacional').first().json.cliente[\"ultima_solicitud\"] }}",
+            "actualizado_en": "={{ $('Motor conversacional').first().json.cliente[\"actualizado_en\"] }}"
+          },
+          "matchingColumns": [
+            "wa_id"
+          ],
+          "schema": [
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre_perfil",
+              "displayName": "nombre_perfil",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "segmento",
+              "displayName": "segmento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ultima_solicitud",
+              "displayName": "ultima_solicitud",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "actualizado_en",
+              "displayName": "actualizado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "8a705fe1-c678-48b6-aa39-f1da51e269b9",
+      "name": "Guardar cliente",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $('Entrada').first().json.mensaje_id }}",
+            "conversacion_id": "={{ $('Motor conversacional').first().json.conversacion.conversacion_id }}",
+            "resultado": "={{ $('Motor conversacional').first().json.resultado_evento }}"
+          },
+          "matchingColumns": [
+            "mensaje_id"
+          ],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "65caa5c7-425d-4c4d-a2b8-ca8033bca1a5",
+      "name": "Marcar procesado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3520,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b48e9f33-7f6d-4ce5-abfc-29a540a3f3e3",
+              "leftValue": "={{ ($('Motor conversacional').first().json.eventos || []).length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "895931a9-906c-4dbe-a19b-0ebf5911a446",
+      "name": "¿Hay eventos del bot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3740,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nreturn $('Motor conversacional').first().json.eventos.map(json => ({ json }));"
+      },
+      "id": "7463d940-987d-4d67-aadf-2bd644e058e8",
+      "name": "Eventos del bot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3960,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $json[\"mensaje_id\"] }}",
+            "fecha": "={{ $json[\"fecha\"] }}",
+            "wa_id": "={{ $json[\"wa_id\"] }}",
+            "conversacion_id": "={{ $json[\"conversacion_id\"] }}",
+            "direccion": "={{ $json[\"direccion\"] }}",
+            "tipo": "={{ $json[\"tipo\"] }}",
+            "texto": "={{ $json[\"texto\"] }}",
+            "media_id": "={{ $json[\"media_id\"] }}",
+            "resultado": "={{ $json[\"resultado\"] }}",
+            "estado_entrega": "={{ $json[\"estado_entrega\"] }}",
+            "detalle": "={{ $json[\"detalle\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado_entrega",
+              "displayName": "estado_entrega",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "3c863d0c-0897-44d8-a161-cfb5643e15d9",
+      "name": "Registrar eventos del bot",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4180,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ef74974e-db88-412d-a9f6-cbae94d0692c",
+              "leftValue": "={{ !!$('Motor conversacional').first().json.aviso && !!($('Motor conversacional').first().json.aviso_destino || $('Configuración').first().json.waAvisos) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a44a208d-2336-46b8-abed-2bf1ae6afac9",
+      "name": "¿Avisar al equipo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3740,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $('Configuración').first().json.phoneNumberId }}",
+        "recipientPhoneNumber": "={{ ($('Motor conversacional').first().json.aviso_destino || $('Configuración').first().json.waAvisos) }}",
+        "textBody": "={{ $('Motor conversacional').first().json.aviso }}",
+        "additionalFields": {}
+      },
+      "id": "81d3d619-0385-498e-ae3a-b0a043fc6e93",
+      "name": "Avisar al equipo",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        3960,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Aviso interno provisional. Requiere que el número de avisos haya escrito al número comercial en las últimas 24 h o una plantilla aprobada."
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONVERSACIONES",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "wa_id",
+              "lookupValue": "={{ $('Entrada').first().json.wa_id }}"
+            }
+          ]
+        }
+      },
+      "id": "434e69da-6d85-4e62-a65d-0625ee860dfa",
+      "name": "Verificar antes de enviar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4180,
+        400
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Decisiones del subflujo \"Procesar mensaje\" que rodean al motor: duplicados, cambio de modo y envíos.\n// Se usan tal cual en los nodos Code de n8n y en el simulador local.\n\nfunction s(v) { return v === undefined || v === null ? '' : String(v); }\nfunction modoDe(fila) { return fila ? s(fila.modo).trim().toUpperCase() : ''; }\nfunction filaDe(filas, waId) { return (filas || []).find(f => f && s(f.wa_id) !== '' && s(f.wa_id) === s(waId)) || null; }\n\n// Un evento ya visto se omite salvo que haya quedado en RECIBIDO (falló antes de guardar el estado).\n// Si ya se guardó el estado no se recalcula: así no se repiten preguntas ni envíos.\nfunction esDuplicado(mensaje, filasEventos) {\n  return (filasEventos || []).some(f => f && s(f.mensaje_id) === s(mensaje.mensaje_id) && s(f.resultado) !== '' && s(f.resultado) !== 'RECIBIDO');\n}\n\n// Antes de guardar: si una persona cambió el modo mientras el motor trabajaba, no se pisa su cambio.\nfunction verificarCambioModo(motor, filasConversacion) {\n  const actual = modoDe(filaDe(filasConversacion, motor.wa_id));\n  return { cambio: actual !== s(motor.modo_leido).toUpperCase(), modo_actual: actual };\n}\n\n// Justo antes de enviar: se vuelve a comparar el modo guardado con el que dejó el motor.\nfunction prepararEnvios(motor, mensaje, filasConversacion, phoneNumberId) {\n  const actual = modoDe(filaDe(filasConversacion, motor.wa_id));\n  const esperado = s(motor.conversacion.modo).toUpperCase();\n  return (motor.respuestas || []).map((texto, i) => {\n    const base = {\n      wa_id: motor.wa_id, conversacion_id: motor.conversacion.conversacion_id,\n      en_respuesta_a: mensaje.mensaje_id, orden: i + 1, texto,\n    };\n    if (actual !== esperado) {\n      return { ...base, accion: 'registrar', resultado: 'OMITIDO_CAMBIO_MODO', mensaje_id: `OMIT-${mensaje.mensaje_id}-${i + 1}`, detalle: `modo actual ${actual || '(vacío)'}` };\n    }\n    if (mensaje.origen === 'api') {\n      return { ...base, accion: 'registrar', resultado: 'API', mensaje_id: `API-OUT-${mensaje.mensaje_id}-${i + 1}`, detalle: 'respuesta devuelta por la API' };\n    }\n    if (mensaje.origen === 'simulacion') {\n      return { ...base, accion: 'registrar', resultado: 'SIMULADO', mensaje_id: `SIM-${mensaje.mensaje_id}-${i + 1}`, detalle: 'webhook de simulación: no se envió por WhatsApp' };\n    }\n    return { ...base, accion: 'enviar', to: motor.wa_id, phone_number_id: s(mensaje.phone_number_id) || s(phoneNumberId) };\n  });\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { esDuplicado, verificarCambioModo, prepararEnvios, filaDe };\n\n// ---- n8n ----\nconst motor = $('Motor conversacional').first().json;\nconst mensaje = $('Entrada').first().json;\nconst filas = $input.all().map(i => i.json);\nreturn prepararEnvios(motor, mensaje, filas, $('Configuración').first().json.phoneNumberId).map(json => ({ json }));"
+      },
+      "id": "80deacaf-b3ae-47d2-a5d3-b7b6c7994f76",
+      "name": "Preparar envíos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "dc7b92c5-65c5-43f1-a1ba-e10145bbfef8",
+              "leftValue": "={{ $json.accion === 'enviar' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4a6af371-bc29-4497-a162-10b5fa0b3750",
+      "name": "¿Enviar por WhatsApp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4620,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $json.phone_number_id }}",
+        "recipientPhoneNumber": "={{ $json.to }}",
+        "textBody": "={{ $json.texto }}",
+        "additionalFields": {}
+      },
+      "id": "549a6447-f5c1-47d4-afa9-f7b36f6f24f2",
+      "name": "Enviar respuesta",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        4840,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $json.messages[0].id }}",
+            "fecha": "={{ $now.toISO() }}",
+            "wa_id": "={{ $('Preparar envíos').item.json.wa_id }}",
+            "conversacion_id": "={{ $('Preparar envíos').item.json.conversacion_id }}",
+            "direccion": "SALIDA",
+            "tipo": "text",
+            "texto": "={{ $('Preparar envíos').item.json.texto }}",
+            "media_id": "",
+            "resultado": "ENVIADO",
+            "detalle": "={{ 'respuesta a ' + $('Preparar envíos').item.json.en_respuesta_a }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "e116d45a-fcfe-4d33-aad3-fba8d1a294b4",
+      "name": "Registrar salida",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        5060,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ 'ERR-' + $('Preparar envíos').item.json.en_respuesta_a + '-' + $('Preparar envíos').item.json.orden }}",
+            "fecha": "={{ $now.toISO() }}",
+            "wa_id": "={{ $('Preparar envíos').item.json.wa_id }}",
+            "conversacion_id": "={{ $('Preparar envíos').item.json.conversacion_id }}",
+            "direccion": "SALIDA",
+            "tipo": "text",
+            "texto": "={{ $('Preparar envíos').item.json.texto }}",
+            "media_id": "",
+            "resultado": "ERROR_ENVIO",
+            "detalle": "={{ typeof $json.error === 'object' ? JSON.stringify($json.error).slice(0, 500) : String($json.error || $json.message || '').slice(0, 500) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "b6e40b4a-70e8-43c6-a096-dfab9bf584a5",
+      "name": "Registrar error de envío",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        5060,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $json.mensaje_id }}",
+            "fecha": "={{ $now.toISO() }}",
+            "wa_id": "={{ $json.wa_id }}",
+            "conversacion_id": "={{ $json.conversacion_id }}",
+            "direccion": "SALIDA",
+            "tipo": "text",
+            "texto": "={{ $json.texto }}",
+            "media_id": "",
+            "resultado": "={{ $json.resultado }}",
+            "detalle": "={{ $json.detalle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "bdb44943-0c0a-44f8-a586-1e04a1e96387",
+      "name": "Registrar salida sin envío",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4840,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Buscar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar evento": {
+      "main": [
+        [
+          {
+            "node": "Detectar duplicado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detectar duplicado": {
+      "main": [
+        [
+          {
+            "node": "Registrar recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar recepción": {
+      "main": [
+        [
+          {
+            "node": "Leer proveedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer proveedores": {
+      "main": [
+        [
+          {
+            "node": "¿Es proveedor?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es proveedor?": {
+      "main": [
+        [
+          {
+            "node": "Proveedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proveedor": {
+      "main": [
+        [
+          {
+            "node": "Leer cotizaciones del proveedor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leer conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer cotizaciones del proveedor": {
+      "main": [
+        [
+          {
+            "node": "Respuesta de proveedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta de proveedor": {
+      "main": [
+        [
+          {
+            "node": "¿Cotización abierta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Cotización abierta?": {
+      "main": [
+        [
+          {
+            "node": "Guardar respuesta en la cotización",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar respuesta de proveedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar respuesta en la cotización": {
+      "main": [
+        [
+          {
+            "node": "Marcar respuesta de proveedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer conversación": {
+      "main": [
+        [
+          {
+            "node": "Leer catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer catálogo": {
+      "main": [
+        [
+          {
+            "node": "Leer inventario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer inventario": {
+      "main": [
+        [
+          {
+            "node": "Leer configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer configuración": {
+      "main": [
+        [
+          {
+            "node": "Leer productos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer productos": {
+      "main": [
+        [
+          {
+            "node": "Motor conversacional",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Motor conversacional": {
+      "main": [
+        [
+          {
+            "node": "Releer conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Releer conversación": {
+      "main": [
+        [
+          {
+            "node": "Comparar modo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comparar modo": {
+      "main": [
+        [
+          {
+            "node": "¿Cambió el modo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Cambió el modo?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar última entrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar última entrada": {
+      "main": [
+        [
+          {
+            "node": "Marcar entrada omitida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar conversación": {
+      "main": [
+        [
+          {
+            "node": "¿Hay solicitud?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay solicitud?": {
+      "main": [
+        [
+          {
+            "node": "Registrar solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar procesado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar solicitud": {
+      "main": [
+        [
+          {
+            "node": "¿Hay prospecto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay prospecto?": {
+      "main": [
+        [
+          {
+            "node": "Registrar en PAUTAS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar en PAUTAS": {
+      "main": [
+        [
+          {
+            "node": "Guardar cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar cliente": {
+      "main": [
+        [
+          {
+            "node": "Marcar procesado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar procesado": {
+      "main": [
+        [
+          {
+            "node": "¿Avisar al equipo?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Hay eventos del bot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay eventos del bot?": {
+      "main": [
+        [
+          {
+            "node": "Eventos del bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eventos del bot": {
+      "main": [
+        [
+          {
+            "node": "Registrar eventos del bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Avisar al equipo?": {
+      "main": [
+        [
+          {
+            "node": "Avisar al equipo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verificar antes de enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar al equipo": {
+      "main": [
+        [
+          {
+            "node": "Verificar antes de enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar antes de enviar": {
+      "main": [
+        [
+          {
+            "node": "Preparar envíos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar envíos": {
+      "main": [
+        [
+          {
+            "node": "¿Enviar por WhatsApp?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Enviar por WhatsApp?": {
+      "main": [
+        [
+          {
+            "node": "Enviar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar salida sin envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar respuesta": {
+      "main": [
+        [
+          {
+            "node": "Registrar salida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar error de envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

@@ -1,0 +1,14 @@
+.badge {
+  display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .6rem; border-radius: 999px;
+  font-size: .78rem; font-weight: 700; white-space: nowrap; border: 1px solid transparent;
+}
+/* Cobre = alta, coral = derivado, taupe = media, gris cálido = automático. Siempre con texto e ícono. */
+.alta { background: rgba(201, 143, 98, .22); color: #7a4522; border-color: rgba(201, 143, 98, .5); }
+.derivado { background: rgba(235, 130, 120, .2); color: #93362d; border-color: rgba(235, 130, 120, .55); }
+.media { background: rgba(184, 165, 144, .25); color: #5e4d3e; border-color: rgba(184, 165, 144, .55); }
+.automatico { background: rgba(163, 154, 145, .16); color: #5f5852; border-color: rgba(163, 154, 145, .35); }
+
+.estado { display: inline-block; padding: .15rem .55rem; border-radius: 6px; font-size: .78rem; font-weight: 600; background: rgba(62, 47, 37, .06); white-space: nowrap; }
+.confirmado { background: rgba(110, 130, 100, .18); color: #3f5037; }
+.estado.derivado { border: 0; }
+.nuevo { background: rgba(201, 143, 98, .15); color: #7a4522; }

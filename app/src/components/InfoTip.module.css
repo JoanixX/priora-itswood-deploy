@@ -1,0 +1,7 @@
+.caja { position: relative; display: inline-flex; }
+.boton { border: 0; background: transparent; color: var(--taupe-oscuro); cursor: pointer; padding: .15rem; border-radius: 50%; display: inline-flex; }
+.boton:hover { color: var(--tinta); }
+.globo {
+  position: absolute; right: 0; top: 1.8rem; z-index: 30; width: 250px; padding: .75rem; font-size: .8rem; line-height: 1.45;
+  font-weight: 400; color: var(--tinta); text-align: left; box-shadow: var(--sombra-alta);
+}

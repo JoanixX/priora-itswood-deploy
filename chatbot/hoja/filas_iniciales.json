@@ -1,0 +1,151 @@
+{
+  "BOT_CONFIG": [
+    {
+      "clave": "nombre_bot",
+      "valor": "Mermín",
+      "descripcion": "Nombre con el que se presenta el bot."
+    },
+    {
+      "clave": "nombre_negocio",
+      "valor": "ITS WOOD",
+      "descripcion": "Nombre del negocio en los mensajes."
+    },
+    {
+      "clave": "tono",
+      "valor": "cercano",
+      "descripcion": "cercano (tutea) o formal (trata de usted)."
+    },
+    {
+      "clave": "emoji_bot",
+      "valor": "🌳",
+      "descripcion": "Emoji que acompaña al nombre del bot."
+    },
+    {
+      "clave": "url_web",
+      "valor": "",
+      "descripcion": "Tienda web a la que se redirige en el primer mensaje. Vacío = sin enlace."
+    },
+    {
+      "clave": "codigo_descuento_web",
+      "valor": "WEB10",
+      "descripcion": "Código de descuento para comprar en la web."
+    },
+    {
+      "clave": "porcentaje_descuento_web",
+      "valor": "10",
+      "descripcion": "Porcentaje del descuento web (solo el número)."
+    },
+    {
+      "clave": "mensaje_bienvenida",
+      "valor": "",
+      "descripcion": "Plantilla del primer mensaje: {hola}, {nombre_bot}, {emoji_bot}, {nombre_negocio}, {porcentaje}, {codigo}, {url}. Vacío = plantilla del tono."
+    },
+    {
+      "clave": "drive_folder_id",
+      "valor": "",
+      "descripcion": "Carpeta de Drive con la hoja MERMIN_FUENTE. Se llena desde el dashboard."
+    },
+    {
+      "clave": "sheet_fuente_id",
+      "valor": "",
+      "descripcion": "Hoja fuente detectada por la sincronización."
+    },
+    {
+      "clave": "ultima_sync",
+      "valor": "",
+      "descripcion": "Fecha de la última sincronización correcta."
+    },
+    {
+      "clave": "margen_por_defecto",
+      "valor": "0.40",
+      "descripcion": "Margen para productos sin costo (0.40 = 40 %)."
+    },
+    {
+      "clave": "umbral_prioridad_alta",
+      "valor": "70",
+      "descripcion": "Puntaje desde el que un lead es ALTA."
+    },
+    {
+      "clave": "umbral_prioridad_media",
+      "valor": "40",
+      "descripcion": "Puntaje desde el que un lead es MEDIA."
+    },
+    {
+      "clave": "tope_valor",
+      "valor": "3000",
+      "descripcion": "Valor (S/) que cuenta como 100 % en la prioridad."
+    },
+    {
+      "clave": "tope_ganancia",
+      "valor": "1200",
+      "descripcion": "Ganancia (S/) que cuenta como 100 % en la prioridad."
+    },
+    {
+      "clave": "tope_cantidad",
+      "valor": "50",
+      "descripcion": "Unidades que cuentan como 100 % en la prioridad."
+    },
+    {
+      "clave": "tfr_antes_minutos",
+      "valor": "180",
+      "descripcion": "Tiempo de primera respuesta antes del bot, en minutos (línea base manual)."
+    },
+    {
+      "clave": "avisos_whatsapp",
+      "valor": "",
+      "descripcion": "WhatsApp que recibe los avisos de leads ALTA (con código de país)."
+    },
+    {
+      "clave": "avisos_email",
+      "valor": "",
+      "descripcion": "Correos que reciben los resúmenes, separados por coma."
+    },
+    {
+      "clave": "hora_resumen_diario",
+      "valor": "19:00",
+      "descripcion": "Hora del resumen diario (HH:MM, hora de Lima)."
+    }
+  ],
+  "BOT_FIDELIZACION": [
+    {
+      "segmento": "CORPORATIVO",
+      "canal": "EMAIL + ASESOR POR WHATSAPP",
+      "frecuencia_dias": "30",
+      "activo": "SI",
+      "oferta": "Descuento por volumen desde 50 unidades y logo grabado sin costo",
+      "mensaje": "Hola {nombre}, te compartimos el catálogo corporativo de {negocio}. Para tus próximos regalos te recomendamos {producto}. {oferta}. ¿Agendamos una llamada con un asesor?"
+    },
+    {
+      "segmento": "VIP",
+      "canal": "WHATSAPP PERSONAL (HUMANO)",
+      "frecuencia_dias": "45",
+      "activo": "SI",
+      "oferta": "Acceso anticipado a la nueva colección y un regalo en tu próximo pedido",
+      "mensaje": "Hola {nombre}, eres de nuestros clientes favoritos de {negocio} 🌳 {oferta}. Te separamos {producto} antes que nadie."
+    },
+    {
+      "segmento": "RECURRENTE",
+      "canal": "PLANTILLA DE WHATSAPP",
+      "frecuencia_dias": "30",
+      "activo": "SI",
+      "oferta": "10% de descuento en tu siguiente compra",
+      "mensaje": "Hola {nombre}, a quienes compraron lo mismo que tú también les encantó {producto}. {oferta} 👉 {url}"
+    },
+    {
+      "segmento": "NUEVO",
+      "canal": "EMAIL Y WHATSAPP",
+      "frecuencia_dias": "20",
+      "activo": "SI",
+      "oferta": "Cupón SEGUNDA10 para tu segunda compra",
+      "mensaje": "¡Gracias por tu compra, {nombre}! ¿Nos dejas una reseña? Como agradecimiento: {oferta}. Te podría gustar {producto}."
+    },
+    {
+      "segmento": "DORMIDO",
+      "canal": "WHATSAPP CON CUPÓN + RETARGETING EN META ADS",
+      "frecuencia_dias": "60",
+      "activo": "SI",
+      "oferta": "Cupón VUELVE15 por 15 días",
+      "mensaje": "Hola {nombre}, te extrañamos en {negocio}. Vuelve con {oferta}: {producto} te está esperando 👉 {url}"
+    }
+  ]
+}

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Metadatos SEO: duplican a propósito textos de assets/content/landing.es.js (los buscadores no ejecutan JS) -->
+  <title>Priora | Tu negocio atiende a todos, sin que tú te satures</title>
+  <meta name="description" content="Priora atiende a tus clientes por WhatsApp, resuelve solo lo simple y te muestra primero los pedidos que más valen, en un tablero ordenado por prioridad.">
+  <meta name="keywords" content="Priora, asistente para negocios, atención por WhatsApp, tablero de pedidos, priorización, pymes, Lima, Perú">
+  <meta name="author" content="Priora">
+  <meta name="theme-color" content="#F3EBDF">
+
+  <meta property="og:title" content="Priora | Tu negocio atiende a todos, sin que tú te satures">
+  <meta property="og:description" content="Un asistente que atiende a tus clientes, resuelve lo simple y te muestra primero los pedidos que más valen.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_PE">
+  <!-- og:url y la versión absoluta de og:image se completan desde SITE_URL (assets/scripts/config.js) -->
+  <meta property="og:url" content="">
+  <meta property="og:image" content="assets/images/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Priora: Que tu negocio atienda a todos, sin que tú te satures.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/styles/tokens.css">
+  <link rel="stylesheet" href="assets/styles/styles.css">
+</head>
+<body>
+
+<a href="#contenido" class="skip-link" data-text="saltarContenido"></a>
+
+<!-- ===================== NAVBAR ===================== -->
+<header class="navbar-wrap">
+  <nav class="navbar vidrio" id="navbar" aria-label="Navegación principal">
+    <a href="#inicio" class="logo" data-aria-label="nav.inicioAria">
+      <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <circle cx="16" cy="16" r="15" fill="#FFFFFF"/>
+        <path d="M7 19c4-7 10-9 18-6" fill="none" stroke="#3E2F25" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      <span class="logo-name" data-text="marca"></span>
+    </a>
+
+    <button class="hamburger" id="hamburger" type="button" aria-expanded="false" aria-controls="nav-menu" data-aria-label="nav.menuAria">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+
+    <div class="nav-menu" id="nav-menu">
+      <ul class="nav-links" data-list="nav.links">
+        <template><li><a class="nav-link" data-item-href="href" data-item="texto"></a></li></template>
+      </ul>
+      <a href="#contacto" class="btn btn-principal btn-sm" data-app-path="/app" data-text="nav.cta"></a>
+    </div>
+  </nav>
+</header>
+
+<main id="contenido" tabindex="-1">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="hero" id="inicio" aria-labelledby="hero-titulo">
+    <div class="hero-texto">
+      <p class="etiqueta etiqueta-clara" data-text="hero.etiqueta"></p>
+      <h1 id="hero-titulo" data-text="hero.titulo"></h1>
+      <p class="hero-subtitulo" data-text="hero.subtitulo"></p>
+      <div class="hero-botones">
+        <a href="#contacto" class="btn btn-principal" data-app-path="/app" data-text="hero.ctaPrincipal"></a>
+        <a href="#demo" class="btn btn-vidrio" data-app-path="/app/mermin" data-requiere-app data-text="hero.ctaSecundario"></a>
+      </div>
+    </div>
+
+    <!-- Escena decorativa: la URL de Spline vive SOLO en data-spline-url -->
+    <div class="hero-visual" data-spline-url="https://my.spline.design/claritystream-Txg1N81Wzit6iC1CdjTIFz36/" aria-hidden="true">
+      <!-- Respaldo estático (CSS + SVG): se oculta solo cuando la escena 3D terminó de cargar -->
+      <div class="hero-composicion">
+        <svg class="linea-luz" viewBox="0 0 1440 900" preserveAspectRatio="none" focusable="false">
+          <defs>
+            <linearGradient id="luz-gradiente" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#EBA98A" stop-opacity="0"/>
+              <stop offset="0.35" stop-color="#EBA98A"/>
+              <stop offset="0.65" stop-color="#FBF6EF"/>
+              <stop offset="1" stop-color="#C98F62" stop-opacity="0.2"/>
+            </linearGradient>
+          </defs>
+          <path class="linea-luz-halo" d="M-40 560 C 300 640, 520 860, 760 820 S 1180 520, 1500 420"/>
+          <path class="linea-luz-trazo" d="M-40 560 C 300 640, 520 860, 760 820 S 1180 520, 1500 420"/>
+          <path class="linea-luz-nucleo" d="M-40 560 C 300 640, 520 860, 760 820 S 1180 520, 1500 420"/>
+        </svg>
+        <span class="panel panel-1"></span>
+        <span class="panel panel-2 panel-piedra"></span>
+        <span class="panel panel-3"></span>
+        <span class="panel panel-4"></span>
+        <span class="esfera esfera-grande"></span>
+        <span class="esfera esfera-chica"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== DESTACADOS (bajo el hero) ===================== -->
+  <section class="destacados" aria-label="Priora en breve">
+    <article class="tarjeta vidrio">
+      <p class="tarjeta-cifra" data-text="destacados.cifra.valor"></p>
+      <p data-text="destacados.cifra.texto"></p>
+    </article>
+    <article class="tarjeta vidrio">
+      <h2 class="tarjeta-titulo" data-text="destacados.caracteristica.titulo"></h2>
+      <p data-text="destacados.caracteristica.texto"></p>
+    </article>
+    <article class="tarjeta vidrio">
+      <h2 class="tarjeta-titulo" data-text="destacados.voz.titulo"></h2>
+      <p data-text="destacados.voz.texto"></p>
+      <p class="tarjeta-rotulo" data-text="destacados.voz.rotulo"></p>
+    </article>
+  </section>
+
+  <!-- ===================== EL PROBLEMA ===================== -->
+  <section class="seccion" id="problema" aria-labelledby="problema-titulo">
+    <div class="contenedor">
+      <p class="etiqueta" data-text="problema.etiqueta"></p>
+      <h2 id="problema-titulo" data-text="problema.titulo"></h2>
+      <p class="seccion-texto" data-text="problema.texto"></p>
+      <ul class="lista-puntos" data-list="problema.puntos">
+        <template><li data-item="."></li></template>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== CÓMO FUNCIONA ===================== -->
+  <section class="seccion" id="como-funciona" aria-labelledby="como-titulo">
+    <div class="contenedor">
+      <p class="etiqueta" data-text="comoFunciona.etiqueta"></p>
+      <h2 id="como-titulo" data-text="comoFunciona.titulo"></h2>
+      <ol class="pasos" data-list="comoFunciona.pasos">
+        <template>
+          <li class="paso">
+            <span class="paso-numero" data-item="numero" aria-hidden="true"></span>
+            <h3 data-item="titulo"></h3>
+            <p data-item="texto"></p>
+          </li>
+        </template>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ===================== QUÉ INCLUYE ===================== -->
+  <section class="seccion" id="que-incluye" aria-labelledby="incluye-titulo">
+    <div class="contenedor">
+      <p class="etiqueta" data-text="incluye.etiqueta"></p>
+      <h2 id="incluye-titulo" data-text="incluye.titulo"></h2>
+      <ul class="rejilla-incluye" data-list="incluye.items">
+        <template>
+          <li class="tarjeta vidrio">
+            <h3 data-item="titulo"></h3>
+            <p data-item="texto"></p>
+          </li>
+        </template>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== QUÉ LO HACE DISTINTO ===================== -->
+  <section class="seccion" id="distinto" aria-labelledby="distinto-titulo">
+    <div class="contenedor">
+      <p class="etiqueta" data-text="distinto.etiqueta"></p>
+      <h2 id="distinto-titulo" data-text="distinto.titulo"></h2>
+      <ul class="rejilla-distinto" data-list="distinto.tarjetas">
+        <template>
+          <li class="tarjeta vidrio">
+            <h3 data-item="titulo"></h3>
+            <p data-item="texto"></p>
+          </li>
+        </template>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== CASO REAL: ITS WOOD ===================== -->
+  <section class="seccion" id="caso-its-wood" aria-labelledby="caso-titulo">
+    <div class="contenedor">
+      <p class="etiqueta" data-text="caso.etiqueta"></p>
+      <h2 id="caso-titulo" data-text="caso.titulo"></h2>
+      <p class="seccion-texto" data-text="caso.bajada"></p>
+      <dl class="caso-bloques" data-list="caso.bloques">
+        <template>
+          <div class="caso-bloque">
+            <dt data-item="titulo"></dt>
+            <dd data-item="texto"></dd>
+          </div>
+        </template>
+      </dl>
+      <div class="caso-diagnostico">
+        <h3 class="caso-diagnostico-titulo" data-text="caso.diagnostico.titulo"></h3>
+        <ul class="diagnostico-puntos" data-list="caso.diagnostico.puntos">
+          <template><li data-item="."></li></template>
+        </ul>
+      </div>
+      <p class="caso-nota" data-text="caso.nota"></p>
+    </div>
+  </section>
+
+  <!-- ===================== DEMO ===================== -->
+  <section class="seccion" id="demo" aria-labelledby="demo-titulo" data-requiere-app>
+    <div class="contenedor">
+      <p class="etiqueta" data-text="demo.etiqueta"></p>
+      <h2 id="demo-titulo" data-text="demo.titulo"></h2>
+      <p class="seccion-texto" data-text="demo.texto"></p>
+      <p class="demo-nota" data-text="demo.nota"></p>
+      <a class="btn btn-principal" href="#demo" data-app-path="/app/mermin" data-text="demo.cta"></a>
+    </div>
+  </section>
+
+  <!-- ===================== CIERRE ===================== -->
+  <section class="seccion" id="contacto" aria-labelledby="cierre-titulo">
+    <div class="contenedor">
+      <h2 id="cierre-titulo" data-text="cierre.titulo"></h2>
+      <p class="seccion-texto" data-text="cierre.texto"></p>
+      <div class="cierre-botones">
+        <a class="btn btn-principal" href="#contacto" data-app-path="/app" data-text="cierre.cta"></a>
+        <a class="btn btn-vidrio" data-email data-text="cierre.escribenos"></a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p data-text="footer.derechos"></p>
+  <a class="footer-correo" data-email data-email-visible></a>
+  <nav aria-label="Enlaces legales">
+    <a href="terms.html" data-text="footer.terminos"></a>
+    <a href="privacy.html" data-text="footer.privacidad"></a>
+  </nav>
+</footer>
+
+<noscript><p class="noscript">Priora: activa JavaScript para ver el contenido de esta página.</p></noscript>
+
+<script src="assets/scripts/config.js"></script>
+<script src="assets/content/landing.es.js"></script>
+<script src="assets/scripts/content.js"></script>
+<script src="assets/scripts/main.js"></script>
+<script src="assets/scripts/hero-scene.js" defer></script>
+</body>
+</html>

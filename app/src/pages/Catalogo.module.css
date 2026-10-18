@@ -1,0 +1,32 @@
+.subida { padding: 1.25rem; display: flex; flex-direction: column; gap: .8rem; }
+.subida h2 { margin: 0; }
+.zona {
+  border: 2px dashed rgba(143, 122, 102, .5); border-radius: var(--radio); padding: 1.5rem; display: flex; flex-direction: column;
+  align-items: center; gap: .5rem; text-align: center; background: rgba(255, 255, 255, .35); color: var(--taupe-oscuro);
+}
+.zona p { margin: 0; color: var(--tinta); }
+.arrastrando { background: rgba(255, 255, 255, .85); border-color: var(--cobre); }
+.resultado { display: flex; flex-direction: column; gap: .6rem; align-items: flex-start; }
+.archivo { display: flex; align-items: center; gap: .4rem; margin: 0; }
+.errores { width: 100%; padding: .8rem 1rem; border-radius: 12px; background: rgba(235, 130, 120, .14); border-left: 4px solid var(--coral); color: #6e2a23; }
+.errores p { display: flex; align-items: center; gap: .4rem; font-weight: 700; margin: 0; }
+.errores ul { margin: .4rem 0 0; padding-left: 1.2rem; font-size: .88rem; }
+.ok { display: flex; align-items: center; gap: .4rem; font-weight: 700; color: var(--verde-oscuro); margin: 0; }
+.activo { display: flex; flex-direction: column; gap: .6rem; }
+.activoCabeza { display: flex; justify-content: space-between; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.activoCabeza h2 { margin: 0; }
+.buscar { display: flex; align-items: center; gap: .4rem; flex: 0 1 300px; }
+.buscar input { flex: 1; }
+.tablaCaja { width: 100%; overflow: auto; max-height: 65vh; }
+.tabla { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.tabla th { position: sticky; top: 0; background: #faf4ec; text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-suave); padding: .65rem .75rem; z-index: 1; }
+.tabla td { padding: .6rem .75rem; border-bottom: 1px solid rgba(62, 47, 37, .07); }
+.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.poco {
+  display: inline-flex; align-items: center; gap: .25rem; margin-left: .5rem; padding: .1rem .5rem; border-radius: 999px;
+  font-size: .72rem; font-weight: 700; background: rgba(235, 130, 120, .2); color: #93362d; border: 1px solid rgba(235, 130, 120, .55);
+}
+@media (max-width: 600px) {
+  .tabla th:nth-child(2), .tabla td:nth-child(2) { display: none; }
+  .poco { margin: .2rem 0 0; }
+}

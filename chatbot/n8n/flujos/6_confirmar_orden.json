@@ -1,0 +1,1032 @@
+{
+  "name": "ITS WOOD - Confirmar orden",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "3d38c94d-31f9-4b3d-ae03-602dad6a0150",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "81bf3ae2-7b13-4001-a3db-589aa9751b67",
+              "name": "sheetId",
+              "value": "PEGAR_ID_DE_LA_HOJA",
+              "type": "string"
+            },
+            {
+              "id": "42c898a1-ee2d-443c-a7ed-ebb243b03d09",
+              "name": "phoneNumberId",
+              "value": "PEGAR_PHONE_NUMBER_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "08020818-7be9-45db-ade9-03049ee6855f",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Valores del entorno. Edítalos aquí después de importar (o en config.local.json y vuelve a generar)."
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_SOLICITUDES",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "solicitud_id",
+              "lookupValue": "={{ $('Entrada').first().json.solicitud_id }}"
+            }
+          ]
+        }
+      },
+      "id": "3d79d7af-b4db-42d6-a72e-1e5e8ac753e2",
+      "name": "Leer solicitud",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "PROVEEDORES",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "b88290f7-49cb-4626-aea0-08aa48fc3658",
+      "name": "Leer proveedores",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_COTIZACIONES",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "solicitud_id",
+              "lookupValue": "={{ $('Entrada').first().json.solicitud_id }}"
+            }
+          ]
+        }
+      },
+      "id": "48151a95-7f97-4087-a4b5-898e73c4654a",
+      "name": "Leer cotizaciones de la solicitud",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CATALOGO",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "9dcf1581-99a9-4b50-a8c6-4bb7df7025f2",
+      "name": "Leer catálogo",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Confirmación de órdenes y cotizaciones a proveedores.\n// Cuando el equipo confirma una orden (formulario de atención o API), se eligen los proveedores de la pestaña\n// PROVEEDORES que atienden ese producto y se les manda la plantilla de WhatsApp para pedir cotización.\n// Cuando un proveedor responde, su mensaje se guarda como respuesta de la cotización y no pasa por el bot de clientes.\n// Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\nconst PLANTILLA_COTIZACION = 'itswood_solicitud_cotizacion|es';\nconst ESTADOS_CONTACTADO = ['ENVIADA', 'SIMULADA', 'RESPONDIDA'];\nconst COLUMNAS_PROVEEDOR = ['proveedor_id', 'nombre', 'whatsapp', 'rubro', 'productos', 'contacto', 'activo', 'notas'];\nconst COLUMNAS_COTIZACION = [\n  'cotizacion_id', 'solicitud_id', 'proveedor_id', 'proveedor_nombre', 'wa_proveedor', 'producto', 'cantidad',\n  'enviado_en', 'estado', 'mensaje_id', 'respuesta', 'respondido_en', 'detalle',\n];\n\nfunction v(x) { return x === undefined || x === null ? '' : String(x).trim(); }\nfunction n(x) { return v(x).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim(); }\n\n// Números de Perú con 9 dígitos se completan con 51; el resto se usa tal cual (solo dígitos).\nfunction normalizarWhatsapp(x) {\n  const d = v(x).replace(/\\D/g, '');\n  if (/^9\\d{8}$/.test(d)) return `51${d}`;\n  return d.length >= 10 ? d : '';\n}\n\n// Meta no acepta saltos de línea, tabuladores ni más de 4 espacios seguidos en los parámetros de una plantilla.\nfunction parametroPlantilla(x, max) {\n  const s = v(x).replace(/\\s+/g, ' ').trim();\n  return (s.length > (max || 200) ? s.slice(0, max || 200) : s) || '-';\n}\n\nfunction fechaVisible(x) {\n  const s = v(x);\n  return /^\\d{4}-\\d{2}-\\d{2}$/.test(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : s;\n}\n\nfunction leerProveedores(filas) {\n  return (filas || []).map(f => ({\n    proveedor_id: v(f.proveedor_id),\n    nombre: v(f.nombre),\n    whatsapp: normalizarWhatsapp(f.whatsapp),\n    // \"TODOS\" atiende cualquier producto; si no, nombres internos separados por coma o punto y coma.\n    productos: v(f.productos).split(/[;,]/).map(n).filter(Boolean),\n    activo: n(f.activo) !== 'no',\n  })).filter(p => p.proveedor_id && p.nombre && p.activo);\n}\n\nfunction proveedoresPara(nombreInterno, proveedores) {\n  const clave = n(nombreInterno);\n  return proveedores.filter(p => p.whatsapp && (p.productos.includes('todos') || (clave && p.productos.includes(clave))));\n}\n\n// Devuelve qué hacer al confirmar una orden: actualizar la solicitud y a qué proveedores escribir.\n// Es idempotente: un proveedor ya contactado para esa solicitud no se vuelve a contactar.\nfunction prepararCotizaciones({ solicitud, proveedores, cotizaciones, catalogo, ahora, simular, phoneNumberId }) {\n  const ahoraIso = ahora || new Date().toISOString();\n  const error = (texto, status) => ({ ok: false, status: status || 400, error: texto, envios: [] });\n  if (!solicitud || !v(solicitud.solicitud_id)) return error('No existe esa solicitud.', 404);\n  const solicitudId = v(solicitud.solicitud_id);\n  const cantidad = parseInt(v(solicitud.cantidad), 10);\n  if (!v(solicitud.producto_id) || !(cantidad > 0)) {\n    return error(`La solicitud ${solicitudId} no tiene producto y cantidad; complétalos antes de confirmar la orden.`);\n  }\n  const producto = (catalogo || []).find(c => v(c.id) === v(solicitud.producto_id)) || {};\n  const nombreInterno = v(producto.nombre_interno);\n  const candidatos = proveedoresPara(nombreInterno, leerProveedores(proveedores));\n  const yaContactados = new Set((cotizaciones || [])\n    .filter(c => v(c.solicitud_id) === solicitudId && ESTADOS_CONTACTADO.includes(v(c.estado)))\n    .map(c => v(c.proveedor_id)));\n\n  const envios = candidatos.filter(p => !yaContactados.has(p.proveedor_id)).map(p => ({\n    accion: simular ? 'registrar' : 'enviar',\n    cotizacion_id: `COT-${solicitudId}-${p.proveedor_id}`,\n    solicitud_id: solicitudId,\n    proveedor_id: p.proveedor_id,\n    proveedor_nombre: p.nombre,\n    wa_proveedor: p.whatsapp,\n    producto: v(solicitud.producto_nombre),\n    cantidad,\n    enviado_en: ahoraIso,\n    estado: simular ? 'SIMULADA' : 'ENVIADA',\n    phone_number_id: v(phoneNumberId),\n    plantilla: PLANTILLA_COTIZACION,\n    // Orden de {{1}}…{{6}} en la plantilla aprobada (ver docs/proveedores.md).\n    parametros: [\n      parametroPlantilla(p.nombre, 60),\n      parametroPlantilla(solicitudId, 60),\n      parametroPlantilla(solicitud.producto_nombre, 120),\n      String(cantidad),\n      parametroPlantilla(v(solicitud.personalizacion) || 'Sin personalización', 200),\n      parametroPlantilla(fechaVisible(solicitud.fecha_deseada) || 'Por definir', 40),\n    ],\n  }));\n\n  let resumen = `Orden ${solicitudId} confirmada.`;\n  if (!nombreInterno) resumen += ' El producto no tiene nombre_interno en BOT_CATALOGO; solo se contactó a proveedores con TODOS.';\n  if (!candidatos.length) resumen += ' No hay proveedores activos para este producto en PROVEEDORES.';\n  else if (!envios.length) resumen += ' Todos los proveedores de este producto ya habían sido contactados.';\n  else resumen += ` Se ${simular ? 'simuló el pedido' : 'pidió cotización'} a ${envios.length} proveedor(es): ${envios.map(e => e.proveedor_nombre).join(', ')}.`;\n\n  return {\n    ok: true,\n    status: 200,\n    solicitud_id: solicitudId,\n    actualizar_solicitud: { solicitud_id: solicitudId, estado: 'ORDEN_CONFIRMADA' },\n    ya_contactados: [...yaContactados],\n    envios,\n    resumen,\n  };\n}\n\n// Mensaje entrante: si viene de un proveedor, se registra como respuesta de su cotización abierta más reciente.\nfunction identificarProveedor(mensaje, proveedores) {\n  const wa = normalizarWhatsapp(mensaje && mensaje.wa_id);\n  const p = leerProveedores(proveedores).find(x => x.whatsapp && x.whatsapp === wa);\n  return p ? { es_proveedor: true, proveedor_id: p.proveedor_id, proveedor_nombre: p.nombre } : { es_proveedor: false };\n}\n\nfunction registrarRespuestaProveedor({ mensaje, proveedor, cotizaciones, ahora }) {\n  const abiertas = (cotizaciones || [])\n    .filter(c => v(c.proveedor_id) === v(proveedor.proveedor_id) && ['ENVIADA', 'SIMULADA', 'RESPONDIDA'].includes(v(c.estado)))\n    .sort((a, b) => v(b.enviado_en).localeCompare(v(a.enviado_en)));\n  const cotizacion = abiertas[0];\n  const texto = v(mensaje.texto) || (mensaje.media_id ? `[${v(mensaje.tipo)} ${v(mensaje.media_id)}]` : `[${v(mensaje.tipo)}]`);\n  if (!cotizacion) return { actualizar: null, resultado: 'PROVEEDOR_SIN_COTIZACION_ABIERTA' };\n  const previa = v(cotizacion.respuesta);\n  const respuesta = (previa ? `${previa} | ${texto}` : texto).slice(0, 2000);\n  return {\n    actualizar: { cotizacion_id: v(cotizacion.cotizacion_id), estado: 'RESPONDIDA', respuesta, respondido_en: ahora || new Date().toISOString() },\n    resultado: 'RESPUESTA_PROVEEDOR',\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    prepararCotizaciones, identificarProveedor, registrarRespuestaProveedor, normalizarWhatsapp,\n    PLANTILLA_COTIZACION, COLUMNAS_PROVEEDOR, COLUMNAS_COTIZACION,\n  };\n}\n\n// ---- n8n ----\nconst entrada = $('Entrada').first().json;\nconst solicitud = $('Leer solicitud').all().map(i => i.json).find(s => String(s.solicitud_id ?? '') === String(entrada.solicitud_id)) || null;\nreturn [{ json: prepararCotizaciones({\n  solicitud,\n  proveedores: $('Leer proveedores').all().map(i => i.json),\n  cotizaciones: $('Leer cotizaciones de la solicitud').all().map(i => i.json),\n  catalogo: $('Leer catálogo').all().map(i => i.json),\n  ahora: new Date().toISOString(),\n  simular: entrada.simular === true,\n  phoneNumberId: $('Configuración').first().json.phoneNumberId,\n}) }];"
+      },
+      "id": "faa6d6ff-e84c-4bdd-ae98-597832889752",
+      "name": "Preparar cotizaciones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "0300d9cb-6df7-463f-a150-07d23222cfce",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3cea98ee-3c25-4f0d-ad56-c1d9428ea7d1",
+      "name": "¿Orden válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_SOLICITUDES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "solicitud_id": "={{ $('Preparar cotizaciones').first().json.actualizar_solicitud.solicitud_id }}",
+            "estado": "={{ $('Preparar cotizaciones').first().json.actualizar_solicitud.estado }}"
+          },
+          "matchingColumns": [
+            "solicitud_id"
+          ],
+          "schema": [
+            {
+              "id": "solicitud_id",
+              "displayName": "solicitud_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "5a06e113-e1fc-4e53-a8f5-d528fb679cce",
+      "name": "Marcar orden confirmada",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b2e682e2-b328-4427-ae64-a661f028e0cb",
+              "leftValue": "={{ $('Preparar cotizaciones').first().json.envios.length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "96194c10-2d4c-4cc8-ac2d-4de67420e44f",
+      "name": "¿Hay proveedores por contactar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nreturn $('Preparar cotizaciones').first().json.envios.map(json => ({ json }));"
+      },
+      "id": "0fe6475c-ffba-448b-a09f-be8bbedecdea",
+      "name": "Separar envíos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "f39c18e0-2170-43e2-a194-85de156e7a72",
+              "leftValue": "={{ $('Entrada').first().json.simular === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7850d761-a033-42e9-ae27-7c47809f10c4",
+      "name": "¿Simular?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nconst columnas = [\"cotizacion_id\",\"solicitud_id\",\"proveedor_id\",\"proveedor_nombre\",\"wa_proveedor\",\"producto\",\"cantidad\",\"enviado_en\",\"estado\",\"mensaje_id\",\"respuesta\",\"respondido_en\",\"detalle\"];\nreturn $input.all().map(({ json: e }) => ({ json: { ...Object.fromEntries(columnas.map(c => [c, e[c] ?? ''])), detalle: 'simulado: no se envió por WhatsApp' } }));"
+      },
+      "id": "7d8995af-3a4a-4377-afa2-c84f29d14e9e",
+      "name": "Filas simuladas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendTemplate",
+        "phoneNumberId": "={{ $json.phone_number_id }}",
+        "recipientPhoneNumber": "={{ $json.wa_proveedor }}",
+        "template": "={{ $json.plantilla }}",
+        "components": {
+          "component": [
+            {
+              "type": "body",
+              "bodyParameters": {
+                "parameter": [
+                  {
+                    "type": "text",
+                    "text": "={{ $json.parametros[0] }}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "={{ $json.parametros[1] }}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "={{ $json.parametros[2] }}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "={{ $json.parametros[3] }}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "={{ $json.parametros[4] }}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "={{ $json.parametros[5] }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "05700c2d-6c00-4fbb-af2e-4ce577298797",
+      "name": "Enviar plantilla",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Plantilla itswood_solicitud_cotizacion (es), aprobada en Meta. Texto propuesto en docs/proveedores.md."
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nconst columnas = [\"cotizacion_id\",\"solicitud_id\",\"proveedor_id\",\"proveedor_nombre\",\"wa_proveedor\",\"producto\",\"cantidad\",\"enviado_en\",\"estado\",\"mensaje_id\",\"respuesta\",\"respondido_en\",\"detalle\"];\nconst envios = $('Separar envíos').all();\nreturn $input.all().map(({ json: r }, i) => {\n  const e = envios[i].json;\n  const fila = Object.fromEntries(columnas.map(c => [c, e[c] ?? '']));\n  if (r && r.messages && r.messages[0]) return { json: { ...fila, mensaje_id: r.messages[0].id } };\n  const err = r && r.error ? (typeof r.error === 'object' ? JSON.stringify(r.error) : String(r.error)) : 'sin respuesta de WhatsApp';\n  return { json: { ...fila, estado: 'ERROR_ENVIO', detalle: err.slice(0, 500) } };\n});"
+      },
+      "id": "504f1578-1756-4eb1-a25d-0b14f1066804",
+      "name": "Filas enviadas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_COTIZACIONES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cotizacion_id": "={{ $json[\"cotizacion_id\"] }}",
+            "solicitud_id": "={{ $json[\"solicitud_id\"] }}",
+            "proveedor_id": "={{ $json[\"proveedor_id\"] }}",
+            "proveedor_nombre": "={{ $json[\"proveedor_nombre\"] }}",
+            "wa_proveedor": "={{ $json[\"wa_proveedor\"] }}",
+            "producto": "={{ $json[\"producto\"] }}",
+            "cantidad": "={{ $json[\"cantidad\"] }}",
+            "enviado_en": "={{ $json[\"enviado_en\"] }}",
+            "estado": "={{ $json[\"estado\"] }}",
+            "mensaje_id": "={{ $json[\"mensaje_id\"] }}",
+            "respuesta": "={{ $json[\"respuesta\"] }}",
+            "respondido_en": "={{ $json[\"respondido_en\"] }}",
+            "detalle": "={{ $json[\"detalle\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "cotizacion_id",
+              "displayName": "cotizacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "solicitud_id",
+              "displayName": "solicitud_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "proveedor_id",
+              "displayName": "proveedor_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "proveedor_nombre",
+              "displayName": "proveedor_nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_proveedor",
+              "displayName": "wa_proveedor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "producto",
+              "displayName": "producto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cantidad",
+              "displayName": "cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "enviado_en",
+              "displayName": "enviado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "respuesta",
+              "displayName": "respuesta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "respondido_en",
+              "displayName": "respondido_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "9c8f9d26-1732-4b4e-a92b-ed0779c889bb",
+      "name": "Registrar cotizaciones simuladas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_COTIZACIONES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cotizacion_id": "={{ $json[\"cotizacion_id\"] }}",
+            "solicitud_id": "={{ $json[\"solicitud_id\"] }}",
+            "proveedor_id": "={{ $json[\"proveedor_id\"] }}",
+            "proveedor_nombre": "={{ $json[\"proveedor_nombre\"] }}",
+            "wa_proveedor": "={{ $json[\"wa_proveedor\"] }}",
+            "producto": "={{ $json[\"producto\"] }}",
+            "cantidad": "={{ $json[\"cantidad\"] }}",
+            "enviado_en": "={{ $json[\"enviado_en\"] }}",
+            "estado": "={{ $json[\"estado\"] }}",
+            "mensaje_id": "={{ $json[\"mensaje_id\"] }}",
+            "respuesta": "={{ $json[\"respuesta\"] }}",
+            "respondido_en": "={{ $json[\"respondido_en\"] }}",
+            "detalle": "={{ $json[\"detalle\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "cotizacion_id",
+              "displayName": "cotizacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "solicitud_id",
+              "displayName": "solicitud_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "proveedor_id",
+              "displayName": "proveedor_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "proveedor_nombre",
+              "displayName": "proveedor_nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_proveedor",
+              "displayName": "wa_proveedor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "producto",
+              "displayName": "producto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cantidad",
+              "displayName": "cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "enviado_en",
+              "displayName": "enviado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "respuesta",
+              "displayName": "respuesta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "respondido_en",
+              "displayName": "respondido_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "4ae70bdf-8099-4f1e-a18e-8650dd4f68f5",
+      "name": "Registrar cotizaciones",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3080,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nconst prep = $('Preparar cotizaciones').first().json;\nconst filas = $input.all().map(i => i.json).filter(r => r && r.cotizacion_id);\nreturn [{ json: {\n  ok: prep.ok, status: prep.status, resumen: prep.resumen || '', error: prep.error || '',\n  cotizaciones: filas.map(r => ({ proveedor: r.proveedor_nombre, estado: r.estado })),\n} }];"
+      },
+      "id": "9fd61371-83d7-4085-a267-5199c321d448",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Leer solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer solicitud": {
+      "main": [
+        [
+          {
+            "node": "Leer proveedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer proveedores": {
+      "main": [
+        [
+          {
+            "node": "Leer cotizaciones de la solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer cotizaciones de la solicitud": {
+      "main": [
+        [
+          {
+            "node": "Leer catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer catálogo": {
+      "main": [
+        [
+          {
+            "node": "Preparar cotizaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar cotizaciones": {
+      "main": [
+        [
+          {
+            "node": "¿Orden válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Orden válida?": {
+      "main": [
+        [
+          {
+            "node": "Marcar orden confirmada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar orden confirmada": {
+      "main": [
+        [
+          {
+            "node": "¿Hay proveedores por contactar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay proveedores por contactar?": {
+      "main": [
+        [
+          {
+            "node": "Separar envíos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar envíos": {
+      "main": [
+        [
+          {
+            "node": "¿Simular?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Simular?": {
+      "main": [
+        [
+          {
+            "node": "Filas simuladas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas simuladas": {
+      "main": [
+        [
+          {
+            "node": "Registrar cotizaciones simuladas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar cotizaciones simuladas": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar plantilla": {
+      "main": [
+        [
+          {
+            "node": "Filas enviadas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas enviadas": {
+      "main": [
+        [
+          {
+            "node": "Registrar cotizaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar cotizaciones": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

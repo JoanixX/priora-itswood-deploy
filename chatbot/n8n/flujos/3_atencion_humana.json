@@ -1,0 +1,954 @@
+{
+  "name": "ITS WOOD - Atención humana",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "basicAuth",
+        "formTitle": "ITS WOOD · Atención humana",
+        "formDescription": "Toma un caso, responde al cliente por el mismo chat de WhatsApp, devuélvelo al bot o ciérralo. Consulta los mensajes del cliente en la pestaña BOT_EVENTOS.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "WhatsApp del cliente",
+              "placeholder": "51987654321",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Acción",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Tomar caso"
+                  },
+                  {
+                    "option": "Responder"
+                  },
+                  {
+                    "option": "Devolver al bot"
+                  },
+                  {
+                    "option": "Cerrar caso"
+                  },
+                  {
+                    "option": "Confirmar orden"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Mensaje al cliente",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "Responsable",
+              "requiredField": true
+            }
+          ]
+        },
+        "path": "itswood-atencion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c0b617fa-da13-4bc4-a94b-175f22fbf331",
+      "name": "Formulario de atención",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "b5861e34-15a6-4cea-adbe-3cb657df250d"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5b905486-b43a-45db-aa7f-c80517d21199",
+              "name": "sheetId",
+              "value": "PEGAR_ID_DE_LA_HOJA",
+              "type": "string"
+            },
+            {
+              "id": "c0ee35b2-5424-4cee-a8ee-cfed128bd303",
+              "name": "phoneNumberId",
+              "value": "PEGAR_PHONE_NUMBER_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a3df5826-e7f8-4979-a0e5-495e4dcd5fdf",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Valores del entorno. Edítalos aquí después de importar (o en config.local.json y vuelve a generar)."
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONVERSACIONES",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "wa_id",
+              "lookupValue": "={{ String($json['WhatsApp del cliente'] || '').replace(/\\D/g, '') }}"
+            }
+          ]
+        }
+      },
+      "id": "6b8f8032-f25d-4075-a9e9-581b2a127145",
+      "name": "Leer conversación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\r\n\r\n// Decide qué hace el formulario de atención humana: tomar, responder, devolver al bot o cerrar.\r\n// No envía ni escribe: devuelve el cambio de modo y el mensaje que el flujo enviará.\r\n\r\nconst VENTANA_HORAS = 24;\r\nconst ACCIONES = {\r\n  'Tomar caso': 'HUMANO',\r\n  'Responder': 'HUMANO',\r\n  'Devolver al bot': 'BOT',\r\n  'Cerrar caso': 'CERRADO',\r\n  // No cambia el modo: confirma la última solicitud del cliente y pide cotización a los proveedores.\r\n  'Confirmar orden': null,\r\n};\r\nconst CAMPOS_FORMULARIO = { wa: 'WhatsApp del cliente', accion: 'Acción', mensaje: 'Mensaje al cliente', responsable: 'Responsable' };\r\n\r\nfunction t(v) { return v === undefined || v === null ? '' : String(v).trim(); }\r\n\r\nfunction decidirAccionHumana({ formulario, filas, ahora }) {\r\n  const ahoraIso = ahora || new Date().toISOString();\r\n  const waId = t(formulario[CAMPOS_FORMULARIO.wa]).replace(/\\D/g, '');\r\n  const accion = t(formulario[CAMPOS_FORMULARIO.accion]);\r\n  const mensaje = t(formulario[CAMPOS_FORMULARIO.mensaje]);\r\n  const responsable = t(formulario[CAMPOS_FORMULARIO.responsable]);\r\n  const error = texto => ({ ok: false, wa_id: waId, texto_resultado: texto });\r\n\r\n  if (!waId) return error('Escribe el número de WhatsApp del cliente con código de país, por ejemplo 51987654321.');\r\n  if (!(accion in ACCIONES)) return error('Elige una acción válida.');\r\n  if (!responsable) return error('Indica quién atiende el caso.');\r\n  if (accion === 'Responder' && !mensaje) return error('Escribe el mensaje que quieres enviar.');\r\n  const conv = (filas || []).find(f => f && t(f.wa_id) === waId);\r\n  if (!conv) return error(`No hay una conversación registrada para ${waId}.`);\r\n\r\n  if (mensaje) {\r\n    const ultima = Date.parse(t(conv.ultima_entrada));\r\n    const horas = Number.isFinite(ultima) ? (Date.parse(ahoraIso) - ultima) / 36e5 : Infinity;\r\n    if (horas > VENTANA_HORAS) {\r\n      return error('El último mensaje del cliente tiene más de 24 horas: WhatsApp no permite enviarle texto libre. Hace falta una plantilla aprobada (segunda etapa). No se cambió nada.');\r\n    }\r\n  }\r\n\r\n  if (accion === 'Confirmar orden') {\r\n    if (!t(conv.solicitud_id)) return error('Ese cliente todavía no tiene una solicitud registrada.');\r\n    if (mensaje) return error('Confirmar orden no envía mensaje al cliente: deja el mensaje vacío y usa Responder aparte.');\r\n  }\r\n  const modo = ACCIONES[accion] || t(conv.modo);\r\n  const avisos = {\r\n    HUMANO: 'El caso quedó en atención humana; el bot no responderá a este cliente.',\r\n    BOT: 'El caso volvió al bot; responderá al próximo mensaje del cliente.',\r\n    CERRADO: 'El caso quedó cerrado. Si el cliente vuelve a escribir, el bot iniciará una conversación nueva.',\r\n  };\r\n  const confirmar = accion === 'Confirmar orden' ? t(conv.solicitud_id) : '';\r\n  return {\r\n    ok: true,\r\n    wa_id: waId,\r\n    modo,\r\n    modo_anterior: t(conv.modo),\r\n    responsable,\r\n    actualizado_en: ahoraIso,\r\n    conversacion_id: t(conv.conversacion_id),\r\n    enviar: mensaje,\r\n    confirmar_solicitud: confirmar,\r\n    texto_resultado: confirmar ? `Orden ${confirmar} confirmada.` : avisos[modo],\r\n  };\r\n}\r\n\r\nif (typeof module !== 'undefined' && module.exports) module.exports = { decidirAccionHumana, CAMPOS_FORMULARIO, ACCIONES };\n\n// ---- n8n ----\nconst formulario = $('Formulario de atención').first().json;\nreturn [{ json: decidirAccionHumana({ formulario, filas: $input.all().map(i => i.json), ahora: new Date().toISOString() }) }];"
+      },
+      "id": "84f66531-f783-4900-a74d-47c94aaf94ab",
+      "name": "Decidir acción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c7d86bb8-4a07-4d8c-a127-5cc3421ed041",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7cafb029-57d4-42c1-afc8-5f9dc8a62480",
+      "name": "¿Acción válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONVERSACIONES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "wa_id": "={{ $('Decidir acción').first().json.wa_id }}",
+            "modo": "={{ $('Decidir acción').first().json.modo }}",
+            "responsable": "={{ $('Decidir acción').first().json.responsable }}",
+            "actualizado_en": "={{ $('Decidir acción').first().json.actualizado_en }}"
+          },
+          "matchingColumns": [
+            "wa_id"
+          ],
+          "schema": [
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "modo",
+              "displayName": "modo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "responsable",
+              "displayName": "responsable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "actualizado_en",
+              "displayName": "actualizado_en",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "6c2ed61a-1add-4bb6-ab07-23433dc0a7c6",
+      "name": "Actualizar conversación",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "8ec0ca58-90a1-418e-a541-9020ec0396b2",
+              "leftValue": "={{ !!$('Decidir acción').first().json.confirmar_solicitud }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "088a0eeb-bd76-4d28-a859-f0d261222654",
+      "name": "¿Confirmar orden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nconst d = $('Decidir acción').first().json;\nreturn [{ json: { solicitud_id: d.confirmar_solicitud, simular: false, responsable: d.responsable } }];"
+      },
+      "id": "f07bb8cc-9ab0-4d29-a8b7-583072b52b3f",
+      "name": "Pedido de orden",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "c02d8851-d51c-400d-a236-328c65e60ce4",
+      "name": "Confirmar orden",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        420
+      ],
+      "alwaysOutputData": true,
+      "notes": "Subflujo ITS WOOD - Confirmar orden."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "f7e45650-08c5-4087-aa52-c942e7e5d5a4",
+              "leftValue": "={{ !!$('Decidir acción').first().json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cdd5b944-2a25-44e8-a9e0-75ff98e2108b",
+      "name": "¿Hay mensaje?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $('Configuración').first().json.phoneNumberId }}",
+        "recipientPhoneNumber": "={{ $('Decidir acción').first().json.wa_id }}",
+        "textBody": "={{ $('Decidir acción').first().json.enviar }}",
+        "additionalFields": {}
+      },
+      "id": "8fca60c2-9cd7-4334-a88b-71acb18b2eb1",
+      "name": "Enviar mensaje",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        100
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $json.messages[0].id }}",
+            "fecha": "={{ $now.toISO() }}",
+            "wa_id": "={{ $('Decidir acción').first().json.wa_id }}",
+            "conversacion_id": "={{ $('Decidir acción').first().json.conversacion_id }}",
+            "direccion": "SALIDA_HUMANO",
+            "tipo": "text",
+            "texto": "={{ $('Decidir acción').first().json.enviar }}",
+            "media_id": "",
+            "resultado": "ENVIADO",
+            "detalle": "={{ $('Decidir acción').first().json.responsable }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "be294d4a-9cac-418e-a8e8-8de7ae90262b",
+      "name": "Registrar mensaje",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ 'ERR-HUM-' + $now.toMillis() }}",
+            "fecha": "={{ $now.toISO() }}",
+            "wa_id": "={{ $('Decidir acción').first().json.wa_id }}",
+            "conversacion_id": "={{ $('Decidir acción').first().json.conversacion_id }}",
+            "direccion": "SALIDA_HUMANO",
+            "tipo": "text",
+            "texto": "={{ $('Decidir acción').first().json.enviar }}",
+            "media_id": "",
+            "resultado": "ERROR_ENVIO",
+            "detalle": "={{ typeof $json.error === 'object' ? JSON.stringify($json.error).slice(0, 500) : String($json.error || $json.message || '').slice(0, 500) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "conversacion_id",
+              "displayName": "conversacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resultado",
+              "displayName": "resultado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "110bf59c-cb94-487b-a1d3-4c9e8840561e",
+      "name": "Registrar error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!doctype html><meta charset=\"utf-8\"><body style=\"font-family:sans-serif;max-width:560px;margin:40px auto;padding:0 16px\"><h2>Listo</h2><p>{{ $('Decidir acción').first().json.texto_resultado }}</p><p>{{ $('Decidir acción').first().json.enviar ? 'Mensaje enviado al cliente.' : '' }}</p><p><a href=\"javascript:history.back()\">Volver al formulario</a></p></body>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "d5c4949c-84e2-4ba1-a39c-6fefeff2f176",
+      "name": "Responder hecho",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!doctype html><meta charset=\"utf-8\"><body style=\"font-family:sans-serif;max-width:560px;margin:40px auto;padding:0 16px\"><h2>El mensaje no se envió</h2><p>{{ $('Decidir acción').first().json.texto_resultado }}</p><p>Error de WhatsApp: {{ $('Registrar error').first().json.detalle }}</p><p><a href=\"javascript:history.back()\">Volver al formulario</a></p></body>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "f40f92b0-01ec-413d-aeee-74db605e2d5f",
+      "name": "Responder fallo de envío",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!doctype html><meta charset=\"utf-8\"><body style=\"font-family:sans-serif;max-width:560px;margin:40px auto;padding:0 16px\"><h2>{{ $json.ok ? 'Orden confirmada' : 'No se confirmó la orden' }}</h2><p>{{ $json.ok ? $json.resumen : $json.error }}</p><p>{{ ($json.cotizaciones || []).map(c => c.proveedor + ': ' + c.estado).join(' · ') }}</p><p><a href=\"javascript:history.back()\">Volver al formulario</a></p></body>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "5106acfe-7198-4885-adae-d1085ed25fda",
+      "name": "Responder orden",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!doctype html><meta charset=\"utf-8\"><body style=\"font-family:sans-serif;max-width:560px;margin:40px auto;padding:0 16px\"><h2>No se hizo ningún cambio</h2><p>{{ $('Decidir acción').first().json.texto_resultado }}</p><p><a href=\"javascript:history.back()\">Volver al formulario</a></p></body>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "d1366771-7f6f-480f-a0ab-e3ccc9a6554b",
+      "name": "Responder no válido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Formulario de atención": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Leer conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer conversación": {
+      "main": [
+        [
+          {
+            "node": "Decidir acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decidir acción": {
+      "main": [
+        [
+          {
+            "node": "¿Acción válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Acción válida?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar conversación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder no válido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar conversación": {
+      "main": [
+        [
+          {
+            "node": "¿Confirmar orden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Confirmar orden?": {
+      "main": [
+        [
+          {
+            "node": "Pedido de orden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Hay mensaje?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedido de orden": {
+      "main": [
+        [
+          {
+            "node": "Confirmar orden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar orden": {
+      "main": [
+        [
+          {
+            "node": "Responder orden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay mensaje?": {
+      "main": [
+        [
+          {
+            "node": "Enviar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder hecho",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Registrar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Responder hecho",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar error": {
+      "main": [
+        [
+          {
+            "node": "Responder fallo de envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

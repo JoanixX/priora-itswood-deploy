@@ -1,0 +1,17 @@
+{
+  "name": "priora-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend de la app de Priora (Mermín, ITS WOOD): API REST de docs/API_CONTRATO.md sobre Google Sheets",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --env-file=.env --watch src/index.js",
+    "test": "node --test",
+    "probar": "node scripts/probar_backend.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

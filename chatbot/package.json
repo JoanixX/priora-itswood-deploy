@@ -1,0 +1,14 @@
+{
+  "name": "itswood-chatbot-n8n",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chatbot de WhatsApp de ITS WOOD sobre n8n con Google Sheets como registro",
+  "scripts": {
+    "test": "node --test test/flujo.test.js test/n8n.test.js test/ordenes_api.test.js test/mermin.test.js",
+    "build": "node n8n/build.js && python hoja/generar_plantilla.py",
+    "chat": "node sim/chat.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,203 @@
+{
+  "name": "ITS WOOD - Errores",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a49850e2-99ef-42f0-ae8c-2019a3648ff8",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d6e4a016-5d2e-4356-a704-a56afc6bc0f7",
+              "name": "sheetId",
+              "value": "PEGAR_ID_DE_LA_HOJA",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "d5e8afb5-2b87-4b14-acb2-93a4c3b97960",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Valores del entorno. Edítalos aquí después de importar (o en config.local.json y vuelve a generar)."
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\n// Registra etapa y causa sin credenciales: se tachan tokens, claves y cabeceras de autorización.\nconst e = $('Error Trigger').first().json;\nconst limpiar = v => String(v ?? '')\n  .replace(/(bearer|token|access_token|authorization|password|secret|apikey|api_key)([\"':=\\s]+)[^\\s\"',}]+/gi, '$1$2[oculto]')\n  .replace(/EAA[A-Za-z0-9]{20,}/g, '[token oculto]')\n  .slice(0, 500);\nreturn [{ json: {\n  fecha: new Date().toISOString(),\n  flujo: e.workflow?.name || '',\n  nodo: e.execution?.lastNodeExecuted || e.trigger?.error?.node?.name || '',\n  mensaje: limpiar(e.execution?.error?.message || e.trigger?.error?.message),\n  ejecucion_id: String(e.execution?.id || ''),\n  modo: e.execution?.mode || '',\n} }];"
+      },
+      "id": "667370c0-cdae-4fe8-ad75-d53c81fde88f",
+      "name": "Preparar registro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_ERRORES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "={{ $json.fecha }}",
+            "flujo": "={{ $json.flujo }}",
+            "nodo": "={{ $json.nodo }}",
+            "mensaje": "={{ $json.mensaje }}",
+            "ejecucion_id": "={{ $json.ejecucion_id }}",
+            "modo": "={{ $json.modo }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "flujo",
+              "displayName": "flujo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nodo",
+              "displayName": "nodo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "mensaje",
+              "displayName": "mensaje",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ejecucion_id",
+              "displayName": "ejecucion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "modo",
+              "displayName": "modo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "16803d2f-6e5a-40fc-a72b-81777dafc18e",
+      "name": "Registrar error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Preparar registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar registro": {
+      "main": [
+        [
+          {
+            "node": "Registrar error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

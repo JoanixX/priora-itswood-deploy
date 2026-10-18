@@ -1,0 +1,286 @@
+{
+  "name": "ITS WOOD - Entrada WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ]
+      },
+      "id": "d2504747-bc54-4fc8-ae2c-4c9c3c02903c",
+      "name": "WhatsApp Trigger",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "cbd75b05-deaa-46c1-a855-266c13e49ce6"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "itswood-simulacion",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "08d10003-a97b-457f-ac03-42ad91f3cd38",
+      "name": "Webhook de simulación",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        420
+      ],
+      "webhookId": "25cf6f1a-4153-4cda-a4ca-2ed2bacea37d",
+      "notes": "Solo para pruebas: recibe el mismo JSON que envía Meta y registra las respuestas como SIMULADO. Desactívalo en operación."
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Convierte lo que llega al flujo de entrada en eventos planos: un elemento por mensaje y otro por estado de entrega.\n// Acepta la salida del WhatsApp Trigger de n8n, el cuerpo crudo del webhook de Meta y el webhook de simulación\n// ({ headers, body }). Los estados \"sent\" se descartan: el envío ya se registra con la respuesta de la API.\n\nconst MAX_TEXTO_ENTRADA = 1000;\n\nfunction txt(v) { return v === undefined || v === null ? '' : String(v); }\nfunction corto(v) { const s = txt(v); return s.length > MAX_TEXTO_ENTRADA ? s.slice(0, MAX_TEXTO_ENTRADA) : s; }\n\nfunction valoresWhatsApp(obj) {\n  if (!obj || typeof obj !== 'object') return [];\n  if (Array.isArray(obj.entry)) return obj.entry.flatMap(e => (e.changes || []).map(c => c.value || {}));\n  if (Array.isArray(obj.changes)) return obj.changes.map(c => c.value || {});\n  if (obj.value && typeof obj.value === 'object' && !obj.messages && !obj.statuses) return [obj.value];\n  if (obj.messages || obj.statuses) return [obj];\n  return [];\n}\n\nfunction fechaIso(segundos) {\n  const n = Number(segundos);\n  return Number.isFinite(n) && n > 0 ? new Date(n * 1000).toISOString() : new Date().toISOString();\n}\n\nfunction normalizarMensaje(msg, valor, origen) {\n  const contacto = (valor.contacts || []).find(c => c.wa_id === msg.from) || (valor.contacts || [])[0] || {};\n  const evento = {\n    tipo_evento: 'mensaje',\n    origen,\n    mensaje_id: txt(msg.id),\n    wa_id: txt(msg.from),\n    telefono: txt(msg.from),\n    nombre_perfil: txt(contacto.profile && contacto.profile.name),\n    phone_number_id: txt(valor.metadata && valor.metadata.phone_number_id),\n    fecha_iso: fechaIso(msg.timestamp),\n    tipo: txt(msg.type),\n    texto: '',\n    opcion_id: '',\n    media_id: '',\n    latitud: '',\n    longitud: '',\n  };\n  const m = msg[msg.type] || {};\n  switch (msg.type) {\n    case 'text': evento.texto = m.body; break;\n    case 'interactive': {\n      const r = m.button_reply || m.list_reply || {};\n      evento.texto = r.title;\n      evento.opcion_id = r.id;\n      break;\n    }\n    case 'button': evento.texto = m.text; evento.opcion_id = m.payload; break;\n    case 'image': case 'video': case 'document': case 'sticker':\n      evento.media_id = m.id;\n      evento.texto = m.caption;\n      break;\n    case 'audio': evento.media_id = m.id; break;\n    case 'location':\n      evento.texto = [m.name, m.address].filter(Boolean).join(' - ');\n      evento.latitud = txt(m.latitude);\n      evento.longitud = txt(m.longitude);\n      break;\n    case 'reaction': evento.texto = m.emoji; break;\n    default: break;\n  }\n  for (const k of ['texto', 'opcion_id', 'media_id']) evento[k] = corto(evento[k]);\n  return evento;\n}\n\nfunction normalizarEstado(st) {\n  const error = (st.errors || [])[0];\n  return {\n    tipo_evento: 'estado',\n    mensaje_id: txt(st.id),\n    wa_id: txt(st.recipient_id),\n    estado: txt(st.status),\n    fecha_iso: fechaIso(st.timestamp),\n    detalle: error ? corto(`${txt(error.code)} ${txt(error.title)} ${txt(error.message)}`.trim()) : '',\n  };\n}\n\nfunction normalizarEntrada(items) {\n  const eventos = [];\n  for (const item of items || []) {\n    const json = item && item.json !== undefined ? item.json : item;\n    const esSimulacion = !!(json && json.body && json.headers);\n    const origen = esSimulacion ? 'simulacion' : 'whatsapp';\n    for (const valor of valoresWhatsApp(esSimulacion ? json.body : json)) {\n      for (const msg of valor.messages || []) if (msg && msg.id && msg.from) eventos.push(normalizarMensaje(msg, valor, origen));\n      for (const st of valor.statuses || []) if (st && st.id && st.status !== 'sent') eventos.push(normalizarEstado(st));\n    }\n  }\n  return eventos;\n}\n\nif (typeof module !== 'undefined' && module.exports) module.exports = { normalizarEntrada };\n\n// ---- n8n ----\nreturn normalizarEntrada($input.all()).map(json => ({ json }));"
+      },
+      "id": "6b791bf1-2a60-4217-a946-6762d4062dbb",
+      "name": "Normalizar evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c4bbe7a6-a1b9-425d-a5da-47a3276a1cfb",
+              "name": "sheetId",
+              "value": "PEGAR_ID_DE_LA_HOJA",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "80e5c98c-98f6-42a1-a583-39e4334a224f",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        300
+      ],
+      "notes": "Valores del entorno. Edítalos aquí después de importar (o en config.local.json y vuelve a generar)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "56980115-5099-46a0-a1bb-cc8f81bd506d",
+              "leftValue": "={{ $json.tipo_evento === 'estado' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6b251327-baa5-45ad-aeb0-134d7274c90b",
+      "name": "¿Es estado de entrega?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_EVENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensaje_id": "={{ $json.mensaje_id }}",
+            "estado_entrega": "={{ $json.estado }}",
+            "detalle": "={{ $json.detalle }}"
+          },
+          "matchingColumns": [
+            "mensaje_id"
+          ],
+          "schema": [
+            {
+              "id": "mensaje_id",
+              "displayName": "mensaje_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado_entrega",
+              "displayName": "estado_entrega",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "233e35b1-8d3d-41dc-ad27-32caabb4eb08",
+      "name": "Actualizar entrega",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Si el mensaje no está en Eventos (por ejemplo, un aviso interno), no hay fila que actualizar."
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "a64fcee5-2e00-41da-a688-85d02607dc12",
+      "name": "Procesar mensaje",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        400
+      ],
+      "notes": "Elige aquí el flujo \"ITS WOOD - Procesar mensaje\" después de importarlo. Procesa los mensajes de uno en uno."
+    }
+  ],
+  "connections": {
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalizar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook de simulación": {
+      "main": [
+        [
+          {
+            "node": "Normalizar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar evento": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "¿Es estado de entrega?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es estado de entrega?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar entrega",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Procesar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

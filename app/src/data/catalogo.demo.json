@@ -1,0 +1,497 @@
+[
+ {
+  "id": "PR-4B577D89",
+  "nombre": "CERA DE ABEJA PARA MADERA 90ML",
+  "categoria": "Otros",
+  "precio": 35,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-49D88389",
+  "nombre": "CRUZ BENDICION DE PUERTA - RECUERDOS PARA SACRAMENTOS",
+  "categoria": "Sacramentos",
+  "precio": 28,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-49D88359",
+  "nombre": "PORTAVELA DE MADERA - RECUERDOS PARA SACRAMENTOS",
+  "categoria": "Sacramentos",
+  "precio": 20,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4B52269D",
+  "nombre": "CRUCES DE MADERA - RECUERDOS PARA SACRAMENTOS",
+  "categoria": "Sacramentos",
+  "precio": 17,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4D65596A",
+  "nombre": "TABLA PARRILLERA PERSONALIZADA - SMOKEY",
+  "categoria": "Cocina y parrilla",
+  "precio": 120,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4D655976",
+  "nombre": "Dock 3 en 1 de Madera Personalizado",
+  "categoria": "Oficina",
+  "precio": 80,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-43BDD2E6",
+  "nombre": "Soporte para Laptop de Madera Personalizado",
+  "categoria": "Oficina",
+  "precio": 47,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-49D55EA7",
+  "nombre": "Reloj de Escritorio de Madera TEMPO",
+  "categoria": "Oficina",
+  "precio": 60,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4D6553B6",
+  "nombre": "Porta Post-it de Madera Personalizado",
+  "categoria": "Oficina",
+  "precio": 42,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-478AA935",
+  "nombre": "Parlante de Madera para Celular - SONE",
+  "categoria": "Oficina",
+  "precio": 48,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-49D5587B",
+  "nombre": "Soporte para Reloj de Madera Personalizado",
+  "categoria": "Oficina",
+  "precio": 48,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-496A7867",
+  "nombre": "Joyero de Madera en Forma de Corazon",
+  "categoria": "Hogar y regalo",
+  "precio": 38,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-48AD92BE",
+  "nombre": "Mesa Picnic Plegable - SUNNY",
+  "categoria": "Picnic y vino",
+  "precio": 200,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4966E8E6",
+  "nombre": "Tabla Quesera - TOSCANA",
+  "categoria": "Cocina y parrilla",
+  "precio": 110,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-475BEE5D",
+  "nombre": "Mini Tabla Personalizada - BRIE",
+  "categoria": "Cocina y parrilla",
+  "precio": 48,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-42A6886A",
+  "nombre": "Tabla Quesera Arbol de Navidad",
+  "categoria": "Navidad",
+  "precio": 75,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-42A68EA5",
+  "nombre": "Box Navideno Mini Tabla y Vino - TREE & WINE",
+  "categoria": "Navidad",
+  "precio": 65,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-48A95AE5",
+  "nombre": "Box Navideno Mini Tabla y Cuchillo",
+  "categoria": "Navidad",
+  "precio": 60,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4DD3BD67",
+  "nombre": "Tabla Quesera con Cuchillos - CAPRI",
+  "categoria": "Cocina y parrilla",
+  "precio": 99,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4AD35DAE",
+  "nombre": "Mini Tabla Quesos - ARBOLITO",
+  "categoria": "Cocina y parrilla",
+  "precio": 45,
+  "stock": 2,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4DD3BDE7",
+  "nombre": "ECODESK Organizador de escritorio",
+  "categoria": "Oficina",
+  "precio": 55,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4BD3A29A",
+  "nombre": "Box Regalo Posataza y Taza - NUMA",
+  "categoria": "Café y té",
+  "precio": 85,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-459E235D",
+  "nombre": "Box Posataza Koi y Taza - I LOVE TEA",
+  "categoria": "Café y té",
+  "precio": 78,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-459E2D67",
+  "nombre": "Espejo de Bolsillo - AURA",
+  "categoria": "Hogar y regalo",
+  "precio": 23,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-48A953D9",
+  "nombre": "Posacelular Doble Ranura",
+  "categoria": "Oficina",
+  "precio": 28,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4DD3B2DD",
+  "nombre": "Posacelular hexagonal",
+  "categoria": "Oficina",
+  "precio": 28,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4BD3A66B",
+  "nombre": "Posacelular Corazon",
+  "categoria": "Oficina",
+  "precio": 28,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-492A873B",
+  "nombre": "Tabla Quesera - ROMA",
+  "categoria": "Cocina y parrilla",
+  "precio": 85,
+  "stock": 6,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-45BAB372",
+  "nombre": "Posavasos Set 6 uds - Scar",
+  "categoria": "Café y té",
+  "precio": 80,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4B75357B",
+  "nombre": "Posacelular TRAPECIO",
+  "categoria": "Oficina",
+  "precio": 28,
+  "stock": 12,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4A7796BE",
+  "nombre": "Portarretrato Tipo Libro - TE AMO MAMA",
+  "categoria": "Hogar y regalo",
+  "precio": 115,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-425592EB",
+  "nombre": "Posataza Corazon - LATTE",
+  "categoria": "Café y té",
+  "precio": 58,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4888DED2",
+  "nombre": "Posataza Modelo Corazon",
+  "categoria": "Café y té",
+  "precio": 55,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4A7B556D",
+  "nombre": "Box de Cumpleanos Posataza KOI y Taza",
+  "categoria": "Café y té",
+  "precio": 75,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-47DAEA56",
+  "nombre": "Portavela Portaincienso - GIRLY",
+  "categoria": "Hogar y regalo",
+  "precio": 65,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4B78A976",
+  "nombre": "Portavela Portaincienso - SOULMATE",
+  "categoria": "Hogar y regalo",
+  "precio": 65,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4257E8A7",
+  "nombre": "Portarretrato Tipo Libro - LOVE",
+  "categoria": "Hogar y regalo",
+  "precio": 115,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-43AD53AB",
+  "nombre": "Portarretrato para Bodas - Libro",
+  "categoria": "Hogar y regalo",
+  "precio": 115,
+  "stock": 8,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4D383833",
+  "nombre": "Posataza para cafe - Koi",
+  "categoria": "Café y té",
+  "precio": 45,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-489239EA",
+  "nombre": "Mini Tabla quesera - Racket",
+  "categoria": "Cocina y parrilla",
+  "precio": 38,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-45E6DE83",
+  "nombre": "Mini Tabla quesera Cachimbo",
+  "categoria": "Cocina y parrilla",
+  "precio": 30,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4E769779",
+  "nombre": "Portallaves con Organizador - LAU",
+  "categoria": "Oficina",
+  "precio": 120,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-432598B6",
+  "nombre": "Mesa Picnic Plegable - YARD",
+  "categoria": "Picnic y vino",
+  "precio": 175,
+  "stock": 5,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-45E6D3AD",
+  "nombre": "Mesa Picnic 6 Copas - Praia",
+  "categoria": "Picnic y vino",
+  "precio": 200,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-432598A6",
+  "nombre": "Mesa Picnic Plegable - CORAZON",
+  "categoria": "Picnic y vino",
+  "precio": 175,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-48923B88",
+  "nombre": "Mesa Picnic Plegable - Grace",
+  "categoria": "Picnic y vino",
+  "precio": 175,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-48923B39",
+  "nombre": "Portacorchos - Pale",
+  "categoria": "Picnic y vino",
+  "precio": 130,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4B3B628B",
+  "nombre": "Portarretrato Letra a Mano - Hand Drawn",
+  "categoria": "Hogar y regalo",
+  "precio": 120,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-47B369A8",
+  "nombre": "Toppers Copas de Vino Set 6 - Mora",
+  "categoria": "Picnic y vino",
+  "precio": 130,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4D3A2E5D",
+  "nombre": "Toppers Copas de Vino Set 4 - Mora",
+  "categoria": "Picnic y vino",
+  "precio": 99,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-45E6D377",
+  "nombre": "Tabla Quesera con Mango - Siciliana",
+  "categoria": "Cocina y parrilla",
+  "precio": 75,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4325996A",
+  "nombre": "Plato Parrillero - T-Bone",
+  "categoria": "Cocina y parrilla",
+  "precio": 90,
+  "stock": 29,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4658AAE2",
+  "nombre": "Tabla Parrillera - T-Bone",
+  "categoria": "Cocina y parrilla",
+  "precio": 130,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4A398B5B",
+  "nombre": "Tabla Parrillera - Brasa",
+  "categoria": "Cocina y parrilla",
+  "precio": 130,
+  "stock": 8,
+  "descripcion": "",
+  "imagen_url": null
+ },
+ {
+  "id": "PR-4A3986E2",
+  "nombre": "Mini Tabla - Lopez",
+  "categoria": "Cocina y parrilla",
+  "precio": 45,
+  "stock": null,
+  "descripcion": "",
+  "imagen_url": null
+ }
+]

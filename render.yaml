@@ -1,0 +1,37 @@
+# Blueprint de Render para el backend de la app (carpeta backend/). En Render: New › Blueprint › este repositorio.
+# Las variables con sync: false se piden al crear el servicio (no se guardan en el repo). Ver backend/README.md.
+services:
+  - type: web
+    name: priora-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: virginia
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TZ
+        value: America/Lima
+      - key: SEMBRAR_EJEMPLOS
+        value: "true"
+      # Dominio(s) del frontend en Vercel, separados por coma. Ej.: https://priora-app.vercel.app
+      - key: FRONTEND_ORIGIN
+        sync: false
+      # ID de la hoja de Google Sheets donde se guarda todo (la parte entre /d/ y /edit de la URL).
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      # JSON completo de la cuenta de servicio (o el mismo JSON en base64).
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      # Login de demo del dashboard (una sola cuenta). Sin estas dos, el dashboard queda abierto.
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Clave para firmar los tokens de sesión: texto largo al azar (ver backend/env.example).
+      - key: AUTH_SECRET
+        sync: false

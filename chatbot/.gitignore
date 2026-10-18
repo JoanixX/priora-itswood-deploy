@@ -1,0 +1,4 @@
+node_modules/
+config.local.json
+n8n/flujos_local/
+.n8n-local.md

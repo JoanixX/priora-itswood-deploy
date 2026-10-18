@@ -1,0 +1,4 @@
+producto,categoria,precio,stock,descripcion
+Tabla de prueba PINO,Cocina y parrilla,noventa,4,El precio está escrito en letras
+,Oficina,30,10,Falta el nombre del producto
+Caja de prueba NOGAL,Hogar y regalo,45,dos,El stock está escrito en letras

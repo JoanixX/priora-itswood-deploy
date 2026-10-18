@@ -1,0 +1,1412 @@
+{
+  "name": "Mermín - Sincronizar Drive",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "a3a4c1cd-4483-4a58-ae4a-d87755031f63",
+      "name": "Cada 10 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "PEGAR_ID_DE_LA_CARPETA",
+          "mode": "id"
+        },
+        "event": "fileUpdated",
+        "options": {},
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "id": "55f15a07-9c90-4073-a52e-be99deff0ead",
+      "name": "Cambio en la carpeta",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "disabled": true,
+      "notes": "Vigila la carpeta de config.local.json (driveFolderId). Si se conecta otra carpeta desde el dashboard, cámbiala aquí."
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "ff68129b-a40e-4720-a2d2-247204847eb7",
+      "name": "Desde la API",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b63eeb81-e92b-467e-a2da-79d205fe35c7",
+              "name": "sheetId",
+              "value": "PEGAR_ID_DE_LA_HOJA",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "0172955d-55c5-475d-a70b-432a55feb4fd",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Valores del entorno. Edítalos aquí después de importar (o en config.local.json y vuelve a generar)."
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONFIG",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "55c4d76d-08c8-4927-a373-96ded6ddab89",
+      "name": "Leer configuración",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Configuración editable del bot: pestaña BOT_CONFIG con las columnas clave | valor | descripcion.\n// El dashboard la cambia por la API y el bot la lee en cada mensaje. Una clave vacía o ausente toma el valor\n// por defecto. Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\nconst CONFIG_POR_DEFECTO = {\n  nombre_bot: 'Mermín',\n  nombre_negocio: 'ITS WOOD',\n  tono: 'cercano',\n  emoji_bot: '🌳',\n  url_web: '',\n  codigo_descuento_web: 'WEB10',\n  porcentaje_descuento_web: '10',\n  // Vacío: se usa la plantilla del tono elegido (ver plantillaBienvenida).\n  mensaje_bienvenida: '',\n  drive_folder_id: '',\n  sheet_fuente_id: '',\n  ultima_sync: '',\n  margen_por_defecto: '0.40',\n  umbral_prioridad_alta: '70',\n  umbral_prioridad_media: '40',\n  // Topes con los que se normalizan valor, ganancia y cantidad en la prioridad (recortados a 1).\n  tope_valor: '3000',\n  tope_ganancia: '1200',\n  tope_cantidad: '50',\n  tfr_antes_minutos: '180',\n  avisos_whatsapp: '',\n  avisos_email: '',\n  hora_resumen_diario: '19:00',\n};\n\nconst DESCRIPCIONES_CONFIG = {\n  nombre_bot: 'Nombre con el que se presenta el bot.',\n  nombre_negocio: 'Nombre del negocio en los mensajes.',\n  tono: 'cercano (tutea) o formal (trata de usted).',\n  emoji_bot: 'Emoji que acompaña al nombre del bot.',\n  url_web: 'Tienda web a la que se redirige en el primer mensaje. Vacío = sin enlace.',\n  codigo_descuento_web: 'Código de descuento para comprar en la web.',\n  porcentaje_descuento_web: 'Porcentaje del descuento web (solo el número).',\n  mensaje_bienvenida: 'Plantilla del primer mensaje: {hola}, {nombre_bot}, {emoji_bot}, {nombre_negocio}, {porcentaje}, {codigo}, {url}. Vacío = plantilla del tono.',\n  drive_folder_id: 'Carpeta de Drive con la hoja MERMIN_FUENTE. Se llena desde el dashboard.',\n  sheet_fuente_id: 'Hoja fuente detectada por la sincronización.',\n  ultima_sync: 'Fecha de la última sincronización correcta.',\n  margen_por_defecto: 'Margen para productos sin costo (0.40 = 40 %).',\n  umbral_prioridad_alta: 'Puntaje desde el que un lead es ALTA.',\n  umbral_prioridad_media: 'Puntaje desde el que un lead es MEDIA.',\n  tope_valor: 'Valor (S/) que cuenta como 100 % en la prioridad.',\n  tope_ganancia: 'Ganancia (S/) que cuenta como 100 % en la prioridad.',\n  tope_cantidad: 'Unidades que cuentan como 100 % en la prioridad.',\n  tfr_antes_minutos: 'Tiempo de primera respuesta antes del bot, en minutos (línea base manual).',\n  avisos_whatsapp: 'WhatsApp que recibe los avisos de leads ALTA (con código de país).',\n  avisos_email: 'Correos que reciben los resúmenes, separados por coma.',\n  hora_resumen_diario: 'Hora del resumen diario (HH:MM, hora de Lima).',\n};\n\n// Claves que el dashboard no edita con PUT /config: las escribe la sincronización o POST /config/drive.\nconst CLAVES_SOLO_LECTURA = ['sheet_fuente_id', 'ultima_sync', 'drive_folder_id'];\n\nconst PLANTILLAS_BIENVENIDA = {\n  cercano: '{hola} Soy {nombre_bot} {emoji_bot}, el asistente de {nombre_negocio}. {web}\\n¿Prefieres que te ayude por aquí? Cuéntame si es para tu *empresa* o para *ti*.',\n  formal: '{hola} Soy {nombre_bot} {emoji_bot}, el asistente de {nombre_negocio}. {web}\\n¿Prefiere que le ayude por aquí? Indíqueme si es para su *empresa* o para *usted*.',\n};\n\nfunction cfgTexto(v) { return v === undefined || v === null ? '' : String(v).trim(); }\n\n// Filas de BOT_CONFIG -> objeto con todas las claves (las desconocidas también se conservan).\nfunction leerConfig(filas) {\n  const config = { ...CONFIG_POR_DEFECTO };\n  for (const f of filas || []) {\n    const clave = cfgTexto(f && f.clave);\n    const valor = cfgTexto(f && f.valor);\n    if (clave && valor !== '') config[clave] = valor;\n  }\n  config.tono = config.tono.toLowerCase() === 'formal' ? 'formal' : 'cercano';\n  return config;\n}\n\nfunction numeroConfig(config, clave) {\n  const n = Number(cfgTexto(config[clave]).replace(',', '.'));\n  return Number.isFinite(n) ? n : Number(CONFIG_POR_DEFECTO[clave]);\n}\n\n// Reemplaza {clave} por su valor; las claves sin valor quedan vacías.\nfunction render(plantilla, valores) {\n  return cfgTexto(plantilla).replace(/\\{(\\w+)\\}/g, (_, k) => cfgTexto((valores || {})[k]));\n}\n\nfunction slug(v) {\n  return cfgTexto(v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\n}\n\n// URL de la web con UTM: así se mide qué ventas web vinieron del bot.\nfunction urlConUtm(config) {\n  const url = cfgTexto(config.url_web);\n  if (!url) return '';\n  return `${url}${url.includes('?') ? '&' : '?'}utm_source=whatsapp&utm_campaign=${slug(config.nombre_bot) || 'bot'}`;\n}\n\nfunction valoresPlantilla(config, extra) {\n  return {\n    ...config,\n    porcentaje: config.porcentaje_descuento_web,\n    codigo: config.codigo_descuento_web,\n    url: urlConUtm(config),\n    ...(extra || {}),\n  };\n}\n\n// Frase de la web con el descuento, o vacía si no hay URL.\nfunction fraseWeb(config) {\n  const url = urlConUtm(config);\n  if (!url) return '';\n  const compra = config.tono === 'formal' ? 'Compre' : 'Compra';\n  const lleva = config.tono === 'formal' ? 'llévese' : 'llévate';\n  const codigo = cfgTexto(config.codigo_descuento_web);\n  const pct = cfgTexto(config.porcentaje_descuento_web);\n  const descuento = pct && codigo ? ` y ${lleva} *${pct}% de descuento* con el código *${codigo}*` : '';\n  return `*${compra} en nuestra web*${descuento} 👉 ${url}`;\n}\n\nfunction plantillaBienvenida(config) {\n  return cfgTexto(config.mensaje_bienvenida) || PLANTILLAS_BIENVENIDA[config.tono] || PLANTILLAS_BIENVENIDA.cercano;\n}\n\nfunction mensajeBienvenida(config, nombre) {\n  const formal = config.tono === 'formal';\n  const hola = nombre ? `¡Hola de nuevo, ${nombre}!` : formal ? '¡Buen día!' : '¡Hola!';\n  const texto = render(plantillaBienvenida(config), valoresPlantilla(config, { hola, web: fraseWeb(config) }));\n  // Sin URL la frase de la web queda vacía: se limpian los espacios que deja.\n  return texto.replace(/[ \\t]+\\n/g, '\\n').replace(/[ \\t]{2,}/g, ' ').trim();\n}\n\n// Cambios pedidos por el dashboard ({ clave: valor }) -> filas a guardar, o error.\nfunction validarCambiosConfig(cambios) {\n  if (!cambios || typeof cambios !== 'object' || Array.isArray(cambios)) return { ok: false, error: 'El cuerpo debe ser un objeto { clave: valor }.' };\n  const filas = [];\n  for (const [clave, bruto] of Object.entries(cambios)) {\n    if (!(clave in CONFIG_POR_DEFECTO)) return { ok: false, error: `Clave desconocida: ${clave}.` };\n    if (CLAVES_SOLO_LECTURA.includes(clave)) return { ok: false, error: `${clave} no se edita con PUT /config.` };\n    const valor = cfgTexto(bruto);\n    if (valor.length > 1000) return { ok: false, error: `${clave} admite hasta 1000 caracteres.` };\n    if (clave === 'tono' && valor && !['cercano', 'formal'].includes(valor.toLowerCase())) return { ok: false, error: 'tono debe ser cercano o formal.' };\n    if (clave === 'hora_resumen_diario' && valor && !/^([01]?\\d|2[0-3]):[0-5]\\d$/.test(valor)) return { ok: false, error: 'hora_resumen_diario debe ser HH:MM.' };\n    if (clave === 'url_web' && valor && !/^https?:\\/\\/\\S+$/.test(valor)) return { ok: false, error: 'url_web debe empezar por http:// o https://.' };\n    const numericas = ['margen_por_defecto', 'umbral_prioridad_alta', 'umbral_prioridad_media', 'tope_valor', 'tope_ganancia', 'tope_cantidad', 'tfr_antes_minutos', 'porcentaje_descuento_web'];\n    if (numericas.includes(clave) && valor && !(Number(valor.replace(',', '.')) >= 0)) return { ok: false, error: `${clave} debe ser un número.` };\n    filas.push({ clave, valor, descripcion: DESCRIPCIONES_CONFIG[clave] || '' });\n  }\n  if (!filas.length) return { ok: false, error: 'No hay cambios.' };\n  return { ok: true, filas };\n}\n\n// Filas iniciales de BOT_CONFIG (plantilla de la hoja).\nfunction filasConfigIniciales() {\n  return Object.keys(CONFIG_POR_DEFECTO).map(clave => ({ clave, valor: CONFIG_POR_DEFECTO[clave], descripcion: DESCRIPCIONES_CONFIG[clave] || '' }));\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    leerConfig, render, numeroConfig, urlConUtm, fraseWeb, mensajeBienvenida, valoresPlantilla, validarCambiosConfig,\n    filasConfigIniciales, CONFIG_POR_DEFECTO, DESCRIPCIONES_CONFIG, CLAVES_SOLO_LECTURA, COLUMNAS_CONFIG: ['clave', 'valor', 'descripcion'],\n  };\n}\n\n// ---- n8n ----\nconst config = leerConfig($input.all().map(i => i.json));\nreturn [{ json: config.drive_folder_id\n  ? { ok: true, folder_id: config.drive_folder_id }\n  : { ok: false, error: 'Falta conectar la carpeta de Drive (POST /config/drive).' } }];"
+      },
+      "id": "ae08e533-9af2-4863-a65c-989b9acc4d55",
+      "name": "Carpeta a sincronizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b53c5376-9c1e-4207-a1c5-d92c35908ced",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5e36b05c-d9a7-45f2-ab1d-3206898c5799",
+      "name": "¿Hay carpeta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "={{ \"'\" + $('Carpeta a sincronizar').first().json.folder_id + \"' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false\" }}",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "id": "5175b9a0-04e1-49c3-a2ca-1edab5794c7a",
+      "name": "Buscar hojas en la carpeta",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        200
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Sincronización de la carpeta de Drive: el negocio deja ahí su hoja MERMIN_FUENTE (pestañas PRODUCTOS, CLIENTES y\n// VENTAS) y el flujo [8] la copia a BOT_PRODUCTOS, BOT_CLIENTES_FUENTE y BOT_VENTAS. El bot y el dashboard leen la\n// copia, nunca la fuente: si el negocio rompe su hoja, se registra el error y queda la última copia válida.\n// Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\n// En n8n, fidelizacion.js va concatenado antes de este archivo en el nodo que valida; en Node se carga con require.\n// Se resuelve al usarla: los nodos que solo eligen la hoja o registran errores no incluyen fidelizacion.js.\nfunction syncSegmentar(args) { return (typeof segmentar === 'function' ? segmentar : require('./fidelizacion').segmentar)(args); }\n\nconst PREFIJO_FUENTE = 'MERMIN_FUENTE';\nconst MIME_SHEETS = 'application/vnd.google-apps.spreadsheet';\nconst COLUMNAS_FUENTE = {\n  PRODUCTOS: ['sku', 'nombre', 'categoria', 'precio', 'costo', 'stock', 'activo'],\n  CLIENTES: ['cliente_id', 'nombre', 'telefono', 'email', 'tipo', 'fecha_registro', 'acepta_marketing'],\n  VENTAS: ['fecha', 'pedido_id', 'cliente_id', 'sku', 'cantidad', 'total', 'canal', 'codigo'],\n};\nconst TIPOS_CLIENTE = ['EMPRESA', 'PERSONA'];\nconst CANALES_VENTA = ['WEB', 'WHATSAPP', 'TIENDA'];\n\nfunction syncTexto(v) { return v === undefined || v === null ? '' : String(v).trim(); }\nfunction syncClave(v) { return syncTexto(v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, '_'); }\nfunction syncNumero(v) {\n  const s = syncTexto(v).replace(/^S\\/\\s*/i, '').replace(/\\s/g, '');\n  if (!s) return null;\n  // \"1,234.50\" o \"1234,50\": la coma es decimal solo si no hay punto.\n  const limpio = s.includes('.') ? s.replace(/,/g, '') : s.replace(',', '.');\n  const n = Number(limpio);\n  return Number.isFinite(n) ? n : null;\n}\n\n// Fecha de la hoja -> YYYY-MM-DD. Acepta 2026-10-17, 17/10/2026, 17/10/26, ISO con hora y el número de serie de Sheets.\nfunction fechaFuente(v) {\n  const s = syncTexto(v);\n  if (!s) return '';\n  let g;\n  if ((g = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/))) return armarFecha(+g[1], +g[2], +g[3]);\n  if ((g = s.match(/^(\\d{1,2})[/.-](\\d{1,2})[/.-](\\d{2}|\\d{4})$/))) return armarFecha(g[3].length === 2 ? 2000 + +g[3] : +g[3], +g[2], +g[1]);\n  if (/^\\d{5}(\\.\\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5).toISOString().slice(0, 10);\n  return '';\n}\nfunction armarFecha(y, m, d) {\n  const t = new Date(Date.UTC(y, m - 1, d));\n  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : '';\n}\n\nfunction telefonoFuente(v) {\n  const d = syncTexto(v).replace(/\\D/g, '');\n  if (/^9\\d{8}$/.test(d)) return `51${d}`;\n  return d.length >= 10 ? d : '';\n}\nfunction siNo(v, porDefecto) {\n  const s = syncClave(v);\n  if (!s) return porDefecto;\n  return ['si', 'sí', 's', 'yes', 'y', 'true', '1', 'x'].includes(s) ? 'SI' : 'NO';\n}\n\n// URL de la carpeta (o el id suelto) -> folderId.\nfunction extraerFolderId(url) {\n  const s = syncTexto(url);\n  let g;\n  if ((g = s.match(/\\/folders\\/([A-Za-z0-9_-]{10,})/))) return g[1];\n  if ((g = s.match(/[?&]id=([A-Za-z0-9_-]{10,})/))) return g[1];\n  if (/^[A-Za-z0-9_-]{10,}$/.test(s)) return s;\n  return '';\n}\n\n// Archivos de la carpeta (búsqueda de Drive) -> la hoja fuente: la que empieza por MERMIN_FUENTE o la primera Sheet.\nfunction elegirHojaFuente(archivos) {\n  const hojas = (archivos || []).filter(a => a && syncTexto(a.id) && (!a.mimeType || a.mimeType === MIME_SHEETS));\n  const porNombre = hojas.find(a => syncTexto(a.name).toUpperCase().startsWith(PREFIJO_FUENTE));\n  const elegida = porNombre || hojas[0];\n  return elegida ? { id: syncTexto(elegida.id), nombre: syncTexto(elegida.name) } : null;\n}\n\n// Filas leídas de una pestaña -> filas con claves normalizadas, sin filas vacías.\nfunction filasLimpias(filas) {\n  return (filas || [])\n    .map(f => {\n      const fila = {};\n      for (const k of Object.keys(f || {})) if (k !== 'row_number') fila[syncClave(k)] = f[k];\n      return fila;\n    })\n    .filter(f => Object.values(f).some(v => syncTexto(v) !== ''));\n}\n\nfunction columnasFaltantes(pestana, filas) {\n  const vistas = new Set();\n  for (const f of filas) for (const k of Object.keys(f)) vistas.add(k);\n  return COLUMNAS_FUENTE[pestana].filter(c => !vistas.has(c));\n}\n\nfunction normalizarProductos(filas, avisos) {\n  const vistos = new Set();\n  const productos = [];\n  for (const f of filas) {\n    const sku = syncTexto(f.sku);\n    if (!sku) { avisos.push(`PRODUCTOS: fila sin sku omitida (${syncTexto(f.nombre) || 'sin nombre'}).`); continue; }\n    if (vistos.has(sku)) { avisos.push(`PRODUCTOS: sku ${sku} repetido; se usa la primera fila.`); continue; }\n    vistos.add(sku);\n    const precio = syncNumero(f.precio);\n    if (precio === null) avisos.push(`PRODUCTOS: ${sku} sin precio.`);\n    const costo = syncNumero(f.costo);\n    const stock = syncNumero(f.stock);\n    productos.push({\n      sku, nombre: syncTexto(f.nombre), categoria: syncTexto(f.categoria),\n      precio: precio === null ? '' : precio, costo: costo === null ? '' : costo,\n      stock: stock === null ? '' : Math.floor(stock), activo: siNo(f.activo, 'SI'),\n    });\n  }\n  return productos;\n}\n\nfunction normalizarClientes(filas, avisos) {\n  const clientes = [];\n  const vistos = new Set();\n  for (const f of filas) {\n    const id = syncTexto(f.cliente_id);\n    if (!id) { avisos.push('CLIENTES: fila sin cliente_id omitida.'); continue; }\n    if (vistos.has(id)) { avisos.push(`CLIENTES: cliente_id ${id} repetido; se usa la primera fila.`); continue; }\n    vistos.add(id);\n    const tipo = syncTexto(f.tipo).toUpperCase();\n    if (tipo && !TIPOS_CLIENTE.includes(tipo)) avisos.push(`CLIENTES: ${id} tiene tipo \"${tipo}\"; se toma como PERSONA.`);\n    clientes.push({\n      cliente_id: id, nombre: syncTexto(f.nombre), telefono: telefonoFuente(f.telefono), email: syncTexto(f.email).toLowerCase(),\n      tipo: tipo === 'EMPRESA' ? 'EMPRESA' : 'PERSONA', fecha_registro: fechaFuente(f.fecha_registro),\n      acepta_marketing: siNo(f.acepta_marketing, 'NO'),\n    });\n  }\n  return clientes;\n}\n\nfunction normalizarVentas(filas, productos, avisos) {\n  const precios = Object.fromEntries(productos.map(p => [p.sku, p.precio]));\n  const ventas = [];\n  for (const f of filas) {\n    const fecha = fechaFuente(f.fecha);\n    const pedido = syncTexto(f.pedido_id);\n    if (!fecha || !pedido) { avisos.push(`VENTAS: fila sin fecha válida o sin pedido_id omitida (${pedido || syncTexto(f.fecha) || 'vacía'}).`); continue; }\n    const cantidad = syncNumero(f.cantidad);\n    let total = syncNumero(f.total);\n    const sku = syncTexto(f.sku);\n    if (total === null && cantidad !== null && typeof precios[sku] === 'number') total = Math.round(precios[sku] * cantidad * 100) / 100;\n    const canal = syncTexto(f.canal).toUpperCase();\n    ventas.push({\n      fecha, pedido_id: pedido, cliente_id: syncTexto(f.cliente_id), sku,\n      cantidad: cantidad === null ? '' : cantidad, total: total === null ? '' : total,\n      canal: CANALES_VENTA.includes(canal) ? canal : canal || 'TIENDA', codigo: syncTexto(f.codigo).toUpperCase(),\n    });\n  }\n  return ventas;\n}\n\n// Lo leído de la hoja fuente -> qué escribir. Si falta una columna o no hay productos, no se escribe nada.\nfunction prepararSync({ hoja, productos, clientes, ventas, ahora }) {\n  const ahoraIso = ahora || new Date().toISOString();\n  const errores = [];\n  const avisos = [];\n  if (!hoja) {\n    return { ok: false, errores: [`No hay una hoja de cálculo en la carpeta. Sube la plantilla ${PREFIJO_FUENTE}.`], avisos, ahora: ahoraIso };\n  }\n  const leidas = { PRODUCTOS: filasLimpias(productos), CLIENTES: filasLimpias(clientes), VENTAS: filasLimpias(ventas) };\n  for (const pestana of Object.keys(COLUMNAS_FUENTE)) {\n    // Una pestaña vacía no deja ver sus cabeceras: solo se exige que PRODUCTOS tenga filas.\n    if (!leidas[pestana].length) {\n      if (pestana === 'PRODUCTOS') errores.push('La pestaña PRODUCTOS no tiene filas (o no existe).');\n      continue;\n    }\n    const faltan = columnasFaltantes(pestana, leidas[pestana]);\n    if (faltan.length) errores.push(`A la pestaña ${pestana} le faltan columnas: ${faltan.join(', ')}.`);\n  }\n  if (errores.length) return { ok: false, errores, avisos, hoja, ahora: ahoraIso };\n\n  const prods = normalizarProductos(leidas.PRODUCTOS, avisos);\n  const clis = normalizarClientes(leidas.CLIENTES, avisos);\n  const vents = normalizarVentas(leidas.VENTAS, prods, avisos);\n  const idsClientes = new Set(clis.map(c => c.cliente_id));\n  const sinCliente = vents.filter(v => v.cliente_id && !idsClientes.has(v.cliente_id)).length;\n  if (sinCliente) avisos.push(`VENTAS: ${sinCliente} fila(s) con cliente_id que no está en CLIENTES.`);\n  // Segmentos de fidelización recalculados en cada sincronización (columnas extra de BOT_CLIENTES_FUENTE).\n  const segmentos = Object.fromEntries(syncSegmentar({ clientes: clis, ventas: vents, ahora: ahoraIso }).map(c => [c.cliente_id, c]));\n  for (const c of clis) {\n    const s = segmentos[c.cliente_id];\n    Object.assign(c, { segmento: s.segmento, pedidos: s.pedidos, total_comprado: s.total_comprado, ultima_compra: s.ultima_compra });\n  }\n  return {\n    ok: true,\n    errores,\n    avisos: avisos.slice(0, 50),\n    hoja,\n    ahora: ahoraIso,\n    productos: prods,\n    clientes: clis,\n    ventas: vents,\n    config: [\n      { clave: 'sheet_fuente_id', valor: hoja.id, descripcion: 'Hoja fuente detectada por la sincronización.' },\n      { clave: 'ultima_sync', valor: ahoraIso, descripcion: 'Fecha de la última sincronización correcta.' },\n    ],\n    resumen: `${prods.length} productos, ${clis.length} clientes y ${vents.length} líneas de venta desde \"${hoja.nombre}\".`,\n  };\n}\n\n// Fila de BOT_ERRORES para una sincronización fallida.\nfunction filaErrorSync(resultado) {\n  return {\n    fecha: resultado.ahora, flujo: 'Mermín - Sincronizar Drive', nodo: 'Validar fuente',\n    mensaje: resultado.errores.join(' ').slice(0, 500), ejecucion_id: '', modo: 'sync',\n  };\n}\n\n// POST /config/drive: lo que encontró la búsqueda en la carpeta -> respuesta y filas de BOT_CONFIG.\nfunction conectarDrive({ url, archivos, correoServicio }) {\n  const folderId = extraerFolderId(url);\n  if (!folderId) return { ok: false, status: 400, error: 'No reconozco esa URL. Pega el enlace de la carpeta de Drive (…/drive/folders/<id>).' };\n  const hoja = elegirHojaFuente(archivos);\n  if (!hoja) {\n    const correo = syncTexto(correoServicio);\n    return {\n      ok: false, status: 403, folder_id: folderId, correo_servicio: correo,\n      error: `No veo ninguna hoja de cálculo en esa carpeta. Compártela${correo ? ` con ${correo}` : ' con la cuenta de servicio'} (como lector) y sube la plantilla ${PREFIJO_FUENTE}.`,\n    };\n  }\n  return {\n    ok: true, status: 200, folder_id: folderId, hoja,\n    config: [\n      { clave: 'drive_folder_id', valor: folderId, descripcion: 'Carpeta de Drive con la hoja MERMIN_FUENTE. Se llena desde el dashboard.' },\n      { clave: 'sheet_fuente_id', valor: hoja.id, descripcion: 'Hoja fuente detectada por la sincronización.' },\n    ],\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    extraerFolderId, elegirHojaFuente, prepararSync, filaErrorSync, conectarDrive, fechaFuente, telefonoFuente,\n    COLUMNAS_FUENTE, PREFIJO_FUENTE, MIME_SHEETS,\n  };\n}\n\n// ---- n8n ----\nconst archivos = $input.all().map(i => i.json).filter(a => a && a.id);\nreturn [{ json: { hoja: elegirHojaFuente(archivos) } }];"
+      },
+      "id": "8f301e7a-7735-4e55-abe6-63c28b544e04",
+      "name": "Elegir hoja fuente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ebfe9e64-a47d-4e6f-ab92-4d8624f5d87f",
+              "leftValue": "={{ !!$json.hoja }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "78f0fb58-abe2-413f-a46e-246e6d886966",
+      "name": "¿Hay hoja fuente?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Elegir hoja fuente').first().json.hoja.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "PRODUCTOS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "87a5dba1-8a9e-4e95-ac4a-4f36c9c17466",
+      "name": "Leer PRODUCTOS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        100
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Elegir hoja fuente').first().json.hoja.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CLIENTES",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "56f5a38e-19b2-47c7-a46f-81f4abf0d4e8",
+      "name": "Leer CLIENTES",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        100
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Elegir hoja fuente').first().json.hoja.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "VENTAS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "ea654bde-ca10-4d48-abf3-1d5be4c870eb",
+      "name": "Leer VENTAS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2200,
+        100
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Fidelización (postventa): segmentos de clientes, reglas de publicidad por segmento, recomendaciones y audiencias.\n// Trabaja sobre BOT_CLIENTES_FUENTE, BOT_VENTAS y BOT_PRODUCTOS (copias de la hoja del negocio) y BOT_FIDELIZACION.\n// Reglas fijas, sin IA. Sin dependencias: nodos Code de n8n y simulador.\n\nconst ZONA_FIDELIZACION = 'America/Lima';\nconst DIAS_DORMIDO = 90;\nconst DIAS_NUEVO = 30;\nconst PEDIDOS_VIP = 3;\nconst PORCENTAJE_VIP = 0.10;\nconst SEGMENTOS_FIDELIZACION = ['CORPORATIVO', 'VIP', 'RECURRENTE', 'NUEVO', 'DORMIDO'];\n// Fuera de las reglas del plan: un pedido de hace 30 a 90 días, o ninguna compra.\nconst SEGMENTOS_OTROS = ['OCASIONAL', 'SIN_COMPRAS'];\nconst COLUMNAS_FIDELIZACION = ['segmento', 'canal', 'mensaje', 'oferta', 'frecuencia_dias', 'activo'];\n\n// Valores con los que nace BOT_FIDELIZACION. Placeholders: {nombre}, {producto}, {oferta}, {negocio}, {url}.\nconst REGLAS_POR_DEFECTO = [\n  {\n    segmento: 'CORPORATIVO', canal: 'EMAIL + ASESOR POR WHATSAPP', frecuencia_dias: '30', activo: 'SI',\n    oferta: 'Descuento por volumen desde 50 unidades y logo grabado sin costo',\n    mensaje: 'Hola {nombre}, te compartimos el catálogo corporativo de {negocio}. Para tus próximos regalos te recomendamos {producto}. {oferta}. ¿Agendamos una llamada con un asesor?',\n  },\n  {\n    segmento: 'VIP', canal: 'WHATSAPP PERSONAL (HUMANO)', frecuencia_dias: '45', activo: 'SI',\n    oferta: 'Acceso anticipado a la nueva colección y un regalo en tu próximo pedido',\n    mensaje: 'Hola {nombre}, eres de nuestros clientes favoritos de {negocio} 🌳 {oferta}. Te separamos {producto} antes que nadie.',\n  },\n  {\n    segmento: 'RECURRENTE', canal: 'PLANTILLA DE WHATSAPP', frecuencia_dias: '30', activo: 'SI',\n    oferta: '10% de descuento en tu siguiente compra',\n    mensaje: 'Hola {nombre}, a quienes compraron lo mismo que tú también les encantó {producto}. {oferta} 👉 {url}',\n  },\n  {\n    segmento: 'NUEVO', canal: 'EMAIL Y WHATSAPP', frecuencia_dias: '20', activo: 'SI',\n    oferta: 'Cupón SEGUNDA10 para tu segunda compra',\n    mensaje: '¡Gracias por tu compra, {nombre}! ¿Nos dejas una reseña? Como agradecimiento: {oferta}. Te podría gustar {producto}.',\n  },\n  {\n    segmento: 'DORMIDO', canal: 'WHATSAPP CON CUPÓN + RETARGETING EN META ADS', frecuencia_dias: '60', activo: 'SI',\n    oferta: 'Cupón VUELVE15 por 15 días',\n    mensaje: 'Hola {nombre}, te extrañamos en {negocio}. Vuelve con {oferta}: {producto} te está esperando 👉 {url}',\n  },\n];\n\nfunction fidTexto(v) { return v === undefined || v === null ? '' : String(v).trim(); }\nfunction fidNumero(v) { const s = fidTexto(v).replace(',', '.'); const n = Number(s); return s !== '' && Number.isFinite(n) ? n : null; }\nfunction fidDia(v) {\n  const s = fidTexto(v);\n  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return s;\n  const t = Date.parse(s);\n  if (!Number.isFinite(t)) return '';\n  const partes = new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_FIDELIZACION, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(t));\n  const p = tipo => partes.find(x => x.type === tipo).value;\n  return `${p('year')}-${p('month')}-${p('day')}`;\n}\nfunction diasEntre(a, b) { return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 864e5); }\nfunction fidSumarDias(ymd, dias) {\n  const [y, m, d] = ymd.split('-').map(Number);\n  return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10);\n}\nfunction fidRender(plantilla, valores) { return fidTexto(plantilla).replace(/\\{(\\w+)\\}/g, (_, k) => fidTexto(valores[k])); }\nfunction fidTelefono(v) {\n  const d = fidTexto(v).replace(/\\D/g, '');\n  if (/^9\\d{8}$/.test(d)) return `51${d}`;\n  return d.length >= 10 ? d : '';\n}\nfunction primerNombre(v) { return fidTexto(v).split(/\\s+/)[0] || ''; }\n\n// ---------- segmentos ----------\n\n// Pedidos por cliente (las ventas vienen por línea: un pedido_id puede tener varias filas).\nfunction pedidosPorCliente(ventas) {\n  const porCliente = {};\n  for (const v of ventas || []) {\n    const cliente = fidTexto(v.cliente_id);\n    const pedido = fidTexto(v.pedido_id);\n    const fecha = fidDia(v.fecha);\n    if (!cliente || !pedido || !fecha) continue;\n    const pedidos = (porCliente[cliente] = porCliente[cliente] || {});\n    const p = (pedidos[pedido] = pedidos[pedido] || { pedido_id: pedido, fecha, total: 0, skus: [] });\n    if (fecha < p.fecha) p.fecha = fecha;\n    p.total += fidNumero(v.total) || 0;\n    if (fidTexto(v.sku)) p.skus.push(fidTexto(v.sku));\n  }\n  return porCliente;\n}\n\n// Clientes con su historial y su segmento. Orden de las reglas: CORPORATIVO, DORMIDO, VIP, RECURRENTE, NUEVO.\nfunction segmentar({ clientes, ventas, ahora }) {\n  const hoy = fidDia(ahora || new Date().toISOString());\n  const pedidos = pedidosPorCliente(ventas);\n  const base = (clientes || []).filter(c => c && fidTexto(c.cliente_id)).map(c => {\n    const lista = Object.values(pedidos[fidTexto(c.cliente_id)] || {}).sort((a, b) => a.fecha.localeCompare(b.fecha));\n    const total = lista.reduce((s, p) => s + p.total, 0);\n    const ultima = lista.length ? lista[lista.length - 1].fecha : '';\n    return {\n      cliente_id: fidTexto(c.cliente_id), nombre: fidTexto(c.nombre), telefono: fidTelefono(c.telefono), email: fidTexto(c.email).toLowerCase(),\n      tipo: fidTexto(c.tipo).toUpperCase() === 'EMPRESA' ? 'EMPRESA' : 'PERSONA',\n      acepta_marketing: fidTexto(c.acepta_marketing).toUpperCase() === 'SI' ? 'SI' : 'NO',\n      pedidos: lista.length, total_comprado: Math.round(total * 100) / 100, ultima_compra: ultima,\n      dias_sin_comprar: ultima ? diasEntre(ultima, hoy) : null,\n      fechas_pedidos: lista.map(p => p.fecha), skus_comprados: [...new Set(lista.flatMap(p => p.skus))],\n    };\n  });\n  // Top 10 % en total comprado, entre los que compraron (al menos uno).\n  const compradores = base.filter(c => c.pedidos > 0).sort((a, b) => b.total_comprado - a.total_comprado);\n  const corte = compradores.length ? compradores[Math.max(0, Math.ceil(compradores.length * PORCENTAJE_VIP) - 1)].total_comprado : Infinity;\n  for (const c of base) {\n    if (c.tipo === 'EMPRESA') c.segmento = 'CORPORATIVO';\n    else if (!c.pedidos) c.segmento = 'SIN_COMPRAS';\n    else if (c.dias_sin_comprar > DIAS_DORMIDO) c.segmento = 'DORMIDO';\n    else if (c.pedidos >= PEDIDOS_VIP || c.total_comprado >= corte) c.segmento = 'VIP';\n    else if (c.pedidos === 2) c.segmento = 'RECURRENTE';\n    else if (c.dias_sin_comprar < DIAS_NUEVO) c.segmento = 'NUEVO';\n    else c.segmento = 'OCASIONAL';\n  }\n  return base;\n}\n\nfunction conteoSegmentos(segmentados) {\n  const conteo = Object.fromEntries([...SEGMENTOS_FIDELIZACION, ...SEGMENTOS_OTROS].map(s => [s, 0]));\n  for (const c of segmentados || []) conteo[c.segmento] = (conteo[c.segmento] || 0) + 1;\n  return conteo;\n}\n\n// Columnas que la sincronización agrega a BOT_CLIENTES_FUENTE.\nconst COLUMNAS_SEGMENTO = ['segmento', 'pedidos', 'total_comprado', 'ultima_compra'];\n\n// ---------- reglas por segmento (BOT_FIDELIZACION) ----------\n\nfunction leerReglas(filas) {\n  const reglas = Object.fromEntries(REGLAS_POR_DEFECTO.map(r => [r.segmento, { ...r }]));\n  for (const f of filas || []) {\n    const seg = fidTexto(f && f.segmento).toUpperCase();\n    if (!reglas[seg]) continue;\n    for (const c of COLUMNAS_FIDELIZACION) if (c !== 'segmento' && fidTexto(f[c]) !== '') reglas[seg][c] = fidTexto(f[c]);\n  }\n  for (const r of Object.values(reglas)) {\n    r.frecuencia_dias = String(Math.max(1, Math.floor(fidNumero(r.frecuencia_dias) || 30)));\n    r.activo = fidTexto(r.activo).toUpperCase() === 'NO' ? 'NO' : 'SI';\n  }\n  return reglas;\n}\n\n// PUT /fidelizacion: { reglas: [{ segmento, canal?, mensaje?, oferta?, frecuencia_dias?, activo? }] } -> filas.\nfunction validarReglas(cuerpo) {\n  const lista = Array.isArray(cuerpo) ? cuerpo : cuerpo && Array.isArray(cuerpo.reglas) ? cuerpo.reglas : null;\n  if (!lista || !lista.length) return { ok: false, error: 'Envía { \"reglas\": [ { \"segmento\": \"VIP\", ... } ] }.' };\n  const filas = [];\n  for (const r of lista) {\n    const seg = fidTexto(r && r.segmento).toUpperCase();\n    if (!SEGMENTOS_FIDELIZACION.includes(seg)) return { ok: false, error: `segmento debe ser ${SEGMENTOS_FIDELIZACION.join(', ')}.` };\n    const fila = { segmento: seg };\n    for (const c of COLUMNAS_FIDELIZACION.slice(1)) {\n      if (r[c] === undefined) continue;\n      const v = fidTexto(r[c]);\n      if (v.length > 1000) return { ok: false, error: `${c} admite hasta 1000 caracteres.` };\n      if (c === 'frecuencia_dias' && !(fidNumero(v) >= 1)) return { ok: false, error: 'frecuencia_dias debe ser un número de días (1 o más).' };\n      if (c === 'activo' && !['SI', 'NO'].includes(v.toUpperCase())) return { ok: false, error: 'activo debe ser SI o NO.' };\n      fila[c] = c === 'activo' ? v.toUpperCase() : v;\n    }\n    filas.push(fila);\n  }\n  return { ok: true, filas };\n}\n\n// ---------- recomendaciones ----------\n\nfunction leerProductosFuente(filas) {\n  return (filas || []).filter(p => p && fidTexto(p.sku)).map(p => ({\n    sku: fidTexto(p.sku), nombre: fidTexto(p.nombre), categoria: fidTexto(p.categoria),\n    precio: fidNumero(p.precio), costo: fidNumero(p.costo), stock: fidNumero(p.stock),\n    activo: fidTexto(p.activo).toUpperCase() !== 'NO',\n  }));\n}\n\n// Pares de productos comprados en el mismo pedido y unidades vendidas por producto.\nfunction estadisticasVentas(ventas) {\n  const pedidos = {};\n  const vendidos = {};\n  for (const v of ventas || []) {\n    const sku = fidTexto(v.sku);\n    const pedido = fidTexto(v.pedido_id);\n    if (!sku || !pedido) continue;\n    (pedidos[pedido] = pedidos[pedido] || new Set()).add(sku);\n    vendidos[sku] = (vendidos[sku] || 0) + (fidNumero(v.cantidad) || 1);\n  }\n  const pares = {};\n  for (const skus of Object.values(pedidos)) {\n    for (const a of skus) for (const b of skus) if (a !== b) pares[`${a}|${b}`] = (pares[`${a}|${b}`] || 0) + 1;\n  }\n  return { pares, vendidos };\n}\n\n// cliente: un elemento de segmentar(). Devuelve hasta `limite` productos con el motivo de cada uno.\nfunction recomendarPara(cliente, { productos, ventas, reglas, config, ahora, limite }) {\n  const hoy = fidDia(ahora || new Date().toISOString());\n  const catalogo = leerProductosFuente(productos).filter(p => p.activo && p.precio !== null);\n  const disponible = p => p.stock === null || p.stock > 0;\n  const porSku = Object.fromEntries(catalogo.map(p => [p.sku, p]));\n  const compradas = new Set(cliente.skus_comprados || []);\n  const { pares, vendidos } = estadisticasVentas(ventas);\n  const noCompradas = catalogo.filter(p => !compradas.has(p.sku) && disponible(p));\n  const margen = fidNumero(config && config.margen_por_defecto) || 0.4;\n  const ganancia = p => (p.costo !== null ? p.precio - p.costo : p.precio * margen);\n\n  let candidatos = [];\n  if (cliente.segmento === 'DORMIDO') {\n    // Reactivación: lo más barato con stock.\n    candidatos = [...noCompradas].sort((a, b) => a.precio - b.precio).map(p => ({ p, motivo: 'MAS_ECONOMICO_CON_STOCK' }));\n  } else {\n    // 1. Comprados juntos con lo que ya compró.\n    const puntos = {};\n    for (const [par, n] of Object.entries(pares)) {\n      const [a, b] = par.split('|');\n      if (compradas.has(a) && !compradas.has(b) && porSku[b] && disponible(porSku[b])) puntos[b] = (puntos[b] || 0) + n;\n    }\n    candidatos = Object.entries(puntos).sort((x, y) => y[1] - x[1]).map(([sku]) => ({ p: porSku[sku], motivo: 'COMPRADO_JUNTO' }));\n    // 2. Lo más vendido de sus categorías que aún no compró; sin historial, lo más vendido en general.\n    const categorias = new Set([...compradas].map(s => porSku[s] && porSku[s].categoria).filter(Boolean));\n    const masVendidos = [...noCompradas].sort((a, b) => (vendidos[b.sku] || 0) - (vendidos[a.sku] || 0));\n    const vistos = new Set(candidatos.map(c => c.p.sku));\n    for (const p of masVendidos.filter(x => categorias.has(x.categoria))) if (!vistos.has(p.sku)) { candidatos.push({ p, motivo: 'MAS_VENDIDO_DE_SU_CATEGORIA' }); vistos.add(p.sku); }\n    for (const p of masVendidos) if (!vistos.has(p.sku)) { candidatos.push({ p, motivo: 'MAS_VENDIDO' }); vistos.add(p.sku); }\n    // 4. VIP y corporativos: primero lo de mayor ganancia y ticket (orden estable dentro de cada motivo).\n    if (cliente.segmento === 'VIP' || cliente.segmento === 'CORPORATIVO') {\n      candidatos.sort((a, b) => ganancia(b.p) - ganancia(a.p) || b.p.precio - a.p.precio);\n    }\n  }\n  const elegidos = candidatos.slice(0, limite || 3).map(({ p, motivo }) => ({ sku: p.sku, nombre: p.nombre, categoria: p.categoria, precio: p.precio, motivo }));\n\n  // 3. Momento de recompra: promedio de días entre sus pedidos; sin historial, la frecuencia del segmento.\n  const regla = (reglas || {})[cliente.segmento] || null;\n  const fechas = cliente.fechas_pedidos || [];\n  let dias = null;\n  let base = 'FRECUENCIA_DEL_SEGMENTO';\n  if (fechas.length >= 2) {\n    const saltos = fechas.slice(1).map((f, i) => diasEntre(fechas[i], f)).filter(d => d > 0);\n    if (saltos.length) { dias = Math.round(saltos.reduce((a, b) => a + b, 0) / saltos.length); base = 'PROMEDIO_ENTRE_COMPRAS'; }\n  }\n  if (dias === null) dias = regla ? Number(regla.frecuencia_dias) : 30;\n  const desde = cliente.ultima_compra || hoy;\n  const proxima = fidSumarDias(desde, dias);\n  const mensaje = regla && elegidos.length ? fidRender(regla.mensaje, {\n    nombre: primerNombre(cliente.nombre), producto: elegidos[0].nombre, oferta: regla.oferta,\n    negocio: fidTexto(config && config.nombre_negocio) || 'ITS WOOD', url: fidTexto(config && config.url_web),\n  }).replace(/\\s*👉\\s*$/, '') : '';\n  return {\n    cliente_id: cliente.cliente_id, nombre: cliente.nombre, segmento: cliente.segmento,\n    productos: elegidos,\n    recompra: { dias, base, proxima_compra: proxima, dias_para_recompra: diasEntre(hoy, proxima) },\n    canal: regla ? regla.canal : '', oferta: regla ? regla.oferta : '', mensaje,\n  };\n}\n\n// ---------- campañas (flujo [9]) ----------\n// A quién le toca según frecuencia_dias del segmento. En la demo se envía por email: fuera de la ventana de 24 h,\n// WhatsApp exige una plantilla aprobada por Meta.\n\nconst COLUMNAS_CAMPANA = ['campana_id', 'fecha', 'segmento', 'cliente_id', 'nombre', 'canal', 'destino', 'asunto', 'mensaje', 'estado', 'detalle'];\n\n// Último envío por cliente y segmento (BOT_CAMPANAS con estado ENVIADO).\nfunction ultimosEnvios(campanas, segmento) {\n  const ultimo = {};\n  for (const c of campanas || []) {\n    if (fidTexto(c.segmento).toUpperCase() !== segmento || fidTexto(c.estado).toUpperCase() !== 'ENVIADO') continue;\n    const id = fidTexto(c.cliente_id);\n    const dia = fidDia(c.fecha);\n    if (id && dia && (!ultimo[id] || dia > ultimo[id])) ultimo[id] = dia;\n  }\n  return ultimo;\n}\n\nfunction aQuienLeToca({ segmento, clientes, ventas, productos, fidelizacion, campanas, config, ahora }) {\n  const seg = fidTexto(segmento).toUpperCase();\n  if (!SEGMENTOS_FIDELIZACION.includes(seg)) return { ok: false, status: 400, error: `segmento debe ser ${SEGMENTOS_FIDELIZACION.join(', ')}.` };\n  const ahoraIso = ahora || new Date().toISOString();\n  const hoy = fidDia(ahoraIso);\n  const reglas = leerReglas(fidelizacion);\n  const regla = reglas[seg];\n  const omitidos = { sin_permiso: 0, contactado_recientemente: 0, sin_email: 0 };\n  const base = { ok: true, status: 200, segmento: seg, regla, fecha: hoy, omitidos };\n  if (regla.activo !== 'SI') return { ...base, destinatarios: [], aviso: `La regla de ${seg} está inactiva en BOT_FIDELIZACION.` };\n  const ultimo = ultimosEnvios(campanas, seg);\n  const frecuencia = Number(regla.frecuencia_dias);\n  const negocio = fidTexto(config && config.nombre_negocio) || 'ITS WOOD';\n  const destinatarios = [];\n  for (const c of segmentar({ clientes, ventas, ahora: ahoraIso }).filter(x => x.segmento === seg)) {\n    if (c.acepta_marketing !== 'SI') { omitidos.sin_permiso += 1; continue; }\n    if (ultimo[c.cliente_id] && diasEntre(ultimo[c.cliente_id], hoy) < frecuencia) { omitidos.contactado_recientemente += 1; continue; }\n    if (!c.email) { omitidos.sin_email += 1; continue; }\n    const reco = recomendarPara(c, { productos, ventas, reglas, config, ahora: ahoraIso });\n    destinatarios.push({\n      campana_id: `CAMP-${seg}-${hoy.replace(/-/g, '')}-${c.cliente_id}`,\n      cliente_id: c.cliente_id, nombre: c.nombre, email: c.email, telefono: c.telefono,\n      producto: reco.productos[0] ? reco.productos[0].nombre : '',\n      asunto: `${negocio}: ${regla.oferta}`.slice(0, 150),\n      mensaje: reco.mensaje || fidRender(regla.mensaje, { nombre: primerNombre(c.nombre), producto: 'nuestra nueva colección', oferta: regla.oferta, negocio, url: fidTexto(config && config.url_web) }),\n    });\n  }\n  return { ...base, destinatarios };\n}\n\n// Filas de BOT_CAMPANAS. estado: PREVISTA (vista previa diaria), ENVIADO o ERROR_ENVIO (con resultados por id).\nfunction filasCampana(resultado, { ahora, estado, errores }) {\n  const fallidos = errores || {};\n  return (resultado.destinatarios || []).map(d => ({\n    campana_id: d.campana_id, fecha: ahora || new Date().toISOString(), segmento: resultado.segmento,\n    cliente_id: d.cliente_id, nombre: d.nombre, canal: 'EMAIL', destino: d.email, asunto: d.asunto, mensaje: d.mensaje,\n    estado: fallidos[d.campana_id] ? 'ERROR_ENVIO' : estado, detalle: fallidos[d.campana_id] ? String(fallidos[d.campana_id]).slice(0, 500) : '',\n  }));\n}\n\n// ---------- audiencias para Ads ----------\n\nfunction campoCsv(v) { const s = fidTexto(v); return /[\",\\n]/.test(s) ? `\"${s.replace(/\"/g, '\"\"')}\"` : s; }\n\n// CSV telefono,email del segmento, solo con acepta_marketing = SI (Custom Audience de Meta o Google Ads).\nfunction audiencia(segmentados, segmento) {\n  const seg = fidTexto(segmento).toUpperCase();\n  const filas = (segmentados || []).filter(c => c.segmento === seg && c.acepta_marketing === 'SI' && (c.telefono || c.email));\n  const lineas = ['telefono,email', ...filas.map(c => [c.telefono ? `+${c.telefono}` : '', c.email].map(campoCsv).join(','))];\n  return { segmento: seg, total: filas.length, csv: `${lineas.join('\\n')}\\n` };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    segmentar, conteoSegmentos, leerReglas, validarReglas, recomendarPara, audiencia, leerProductosFuente,\n    aQuienLeToca, filasCampana,\n    SEGMENTOS_FIDELIZACION, SEGMENTOS_OTROS, REGLAS_POR_DEFECTO, COLUMNAS_FIDELIZACION, COLUMNAS_SEGMENTO, COLUMNAS_CAMPANA,\n  };\n}\n'use strict';\n\n// Sincronización de la carpeta de Drive: el negocio deja ahí su hoja MERMIN_FUENTE (pestañas PRODUCTOS, CLIENTES y\n// VENTAS) y el flujo [8] la copia a BOT_PRODUCTOS, BOT_CLIENTES_FUENTE y BOT_VENTAS. El bot y el dashboard leen la\n// copia, nunca la fuente: si el negocio rompe su hoja, se registra el error y queda la última copia válida.\n// Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\n// En n8n, fidelizacion.js va concatenado antes de este archivo en el nodo que valida; en Node se carga con require.\n// Se resuelve al usarla: los nodos que solo eligen la hoja o registran errores no incluyen fidelizacion.js.\nfunction syncSegmentar(args) { return (typeof segmentar === 'function' ? segmentar : require('./fidelizacion').segmentar)(args); }\n\nconst PREFIJO_FUENTE = 'MERMIN_FUENTE';\nconst MIME_SHEETS = 'application/vnd.google-apps.spreadsheet';\nconst COLUMNAS_FUENTE = {\n  PRODUCTOS: ['sku', 'nombre', 'categoria', 'precio', 'costo', 'stock', 'activo'],\n  CLIENTES: ['cliente_id', 'nombre', 'telefono', 'email', 'tipo', 'fecha_registro', 'acepta_marketing'],\n  VENTAS: ['fecha', 'pedido_id', 'cliente_id', 'sku', 'cantidad', 'total', 'canal', 'codigo'],\n};\nconst TIPOS_CLIENTE = ['EMPRESA', 'PERSONA'];\nconst CANALES_VENTA = ['WEB', 'WHATSAPP', 'TIENDA'];\n\nfunction syncTexto(v) { return v === undefined || v === null ? '' : String(v).trim(); }\nfunction syncClave(v) { return syncTexto(v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, '_'); }\nfunction syncNumero(v) {\n  const s = syncTexto(v).replace(/^S\\/\\s*/i, '').replace(/\\s/g, '');\n  if (!s) return null;\n  // \"1,234.50\" o \"1234,50\": la coma es decimal solo si no hay punto.\n  const limpio = s.includes('.') ? s.replace(/,/g, '') : s.replace(',', '.');\n  const n = Number(limpio);\n  return Number.isFinite(n) ? n : null;\n}\n\n// Fecha de la hoja -> YYYY-MM-DD. Acepta 2026-10-17, 17/10/2026, 17/10/26, ISO con hora y el número de serie de Sheets.\nfunction fechaFuente(v) {\n  const s = syncTexto(v);\n  if (!s) return '';\n  let g;\n  if ((g = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/))) return armarFecha(+g[1], +g[2], +g[3]);\n  if ((g = s.match(/^(\\d{1,2})[/.-](\\d{1,2})[/.-](\\d{2}|\\d{4})$/))) return armarFecha(g[3].length === 2 ? 2000 + +g[3] : +g[3], +g[2], +g[1]);\n  if (/^\\d{5}(\\.\\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5).toISOString().slice(0, 10);\n  return '';\n}\nfunction armarFecha(y, m, d) {\n  const t = new Date(Date.UTC(y, m - 1, d));\n  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : '';\n}\n\nfunction telefonoFuente(v) {\n  const d = syncTexto(v).replace(/\\D/g, '');\n  if (/^9\\d{8}$/.test(d)) return `51${d}`;\n  return d.length >= 10 ? d : '';\n}\nfunction siNo(v, porDefecto) {\n  const s = syncClave(v);\n  if (!s) return porDefecto;\n  return ['si', 'sí', 's', 'yes', 'y', 'true', '1', 'x'].includes(s) ? 'SI' : 'NO';\n}\n\n// URL de la carpeta (o el id suelto) -> folderId.\nfunction extraerFolderId(url) {\n  const s = syncTexto(url);\n  let g;\n  if ((g = s.match(/\\/folders\\/([A-Za-z0-9_-]{10,})/))) return g[1];\n  if ((g = s.match(/[?&]id=([A-Za-z0-9_-]{10,})/))) return g[1];\n  if (/^[A-Za-z0-9_-]{10,}$/.test(s)) return s;\n  return '';\n}\n\n// Archivos de la carpeta (búsqueda de Drive) -> la hoja fuente: la que empieza por MERMIN_FUENTE o la primera Sheet.\nfunction elegirHojaFuente(archivos) {\n  const hojas = (archivos || []).filter(a => a && syncTexto(a.id) && (!a.mimeType || a.mimeType === MIME_SHEETS));\n  const porNombre = hojas.find(a => syncTexto(a.name).toUpperCase().startsWith(PREFIJO_FUENTE));\n  const elegida = porNombre || hojas[0];\n  return elegida ? { id: syncTexto(elegida.id), nombre: syncTexto(elegida.name) } : null;\n}\n\n// Filas leídas de una pestaña -> filas con claves normalizadas, sin filas vacías.\nfunction filasLimpias(filas) {\n  return (filas || [])\n    .map(f => {\n      const fila = {};\n      for (const k of Object.keys(f || {})) if (k !== 'row_number') fila[syncClave(k)] = f[k];\n      return fila;\n    })\n    .filter(f => Object.values(f).some(v => syncTexto(v) !== ''));\n}\n\nfunction columnasFaltantes(pestana, filas) {\n  const vistas = new Set();\n  for (const f of filas) for (const k of Object.keys(f)) vistas.add(k);\n  return COLUMNAS_FUENTE[pestana].filter(c => !vistas.has(c));\n}\n\nfunction normalizarProductos(filas, avisos) {\n  const vistos = new Set();\n  const productos = [];\n  for (const f of filas) {\n    const sku = syncTexto(f.sku);\n    if (!sku) { avisos.push(`PRODUCTOS: fila sin sku omitida (${syncTexto(f.nombre) || 'sin nombre'}).`); continue; }\n    if (vistos.has(sku)) { avisos.push(`PRODUCTOS: sku ${sku} repetido; se usa la primera fila.`); continue; }\n    vistos.add(sku);\n    const precio = syncNumero(f.precio);\n    if (precio === null) avisos.push(`PRODUCTOS: ${sku} sin precio.`);\n    const costo = syncNumero(f.costo);\n    const stock = syncNumero(f.stock);\n    productos.push({\n      sku, nombre: syncTexto(f.nombre), categoria: syncTexto(f.categoria),\n      precio: precio === null ? '' : precio, costo: costo === null ? '' : costo,\n      stock: stock === null ? '' : Math.floor(stock), activo: siNo(f.activo, 'SI'),\n    });\n  }\n  return productos;\n}\n\nfunction normalizarClientes(filas, avisos) {\n  const clientes = [];\n  const vistos = new Set();\n  for (const f of filas) {\n    const id = syncTexto(f.cliente_id);\n    if (!id) { avisos.push('CLIENTES: fila sin cliente_id omitida.'); continue; }\n    if (vistos.has(id)) { avisos.push(`CLIENTES: cliente_id ${id} repetido; se usa la primera fila.`); continue; }\n    vistos.add(id);\n    const tipo = syncTexto(f.tipo).toUpperCase();\n    if (tipo && !TIPOS_CLIENTE.includes(tipo)) avisos.push(`CLIENTES: ${id} tiene tipo \"${tipo}\"; se toma como PERSONA.`);\n    clientes.push({\n      cliente_id: id, nombre: syncTexto(f.nombre), telefono: telefonoFuente(f.telefono), email: syncTexto(f.email).toLowerCase(),\n      tipo: tipo === 'EMPRESA' ? 'EMPRESA' : 'PERSONA', fecha_registro: fechaFuente(f.fecha_registro),\n      acepta_marketing: siNo(f.acepta_marketing, 'NO'),\n    });\n  }\n  return clientes;\n}\n\nfunction normalizarVentas(filas, productos, avisos) {\n  const precios = Object.fromEntries(productos.map(p => [p.sku, p.precio]));\n  const ventas = [];\n  for (const f of filas) {\n    const fecha = fechaFuente(f.fecha);\n    const pedido = syncTexto(f.pedido_id);\n    if (!fecha || !pedido) { avisos.push(`VENTAS: fila sin fecha válida o sin pedido_id omitida (${pedido || syncTexto(f.fecha) || 'vacía'}).`); continue; }\n    const cantidad = syncNumero(f.cantidad);\n    let total = syncNumero(f.total);\n    const sku = syncTexto(f.sku);\n    if (total === null && cantidad !== null && typeof precios[sku] === 'number') total = Math.round(precios[sku] * cantidad * 100) / 100;\n    const canal = syncTexto(f.canal).toUpperCase();\n    ventas.push({\n      fecha, pedido_id: pedido, cliente_id: syncTexto(f.cliente_id), sku,\n      cantidad: cantidad === null ? '' : cantidad, total: total === null ? '' : total,\n      canal: CANALES_VENTA.includes(canal) ? canal : canal || 'TIENDA', codigo: syncTexto(f.codigo).toUpperCase(),\n    });\n  }\n  return ventas;\n}\n\n// Lo leído de la hoja fuente -> qué escribir. Si falta una columna o no hay productos, no se escribe nada.\nfunction prepararSync({ hoja, productos, clientes, ventas, ahora }) {\n  const ahoraIso = ahora || new Date().toISOString();\n  const errores = [];\n  const avisos = [];\n  if (!hoja) {\n    return { ok: false, errores: [`No hay una hoja de cálculo en la carpeta. Sube la plantilla ${PREFIJO_FUENTE}.`], avisos, ahora: ahoraIso };\n  }\n  const leidas = { PRODUCTOS: filasLimpias(productos), CLIENTES: filasLimpias(clientes), VENTAS: filasLimpias(ventas) };\n  for (const pestana of Object.keys(COLUMNAS_FUENTE)) {\n    // Una pestaña vacía no deja ver sus cabeceras: solo se exige que PRODUCTOS tenga filas.\n    if (!leidas[pestana].length) {\n      if (pestana === 'PRODUCTOS') errores.push('La pestaña PRODUCTOS no tiene filas (o no existe).');\n      continue;\n    }\n    const faltan = columnasFaltantes(pestana, leidas[pestana]);\n    if (faltan.length) errores.push(`A la pestaña ${pestana} le faltan columnas: ${faltan.join(', ')}.`);\n  }\n  if (errores.length) return { ok: false, errores, avisos, hoja, ahora: ahoraIso };\n\n  const prods = normalizarProductos(leidas.PRODUCTOS, avisos);\n  const clis = normalizarClientes(leidas.CLIENTES, avisos);\n  const vents = normalizarVentas(leidas.VENTAS, prods, avisos);\n  const idsClientes = new Set(clis.map(c => c.cliente_id));\n  const sinCliente = vents.filter(v => v.cliente_id && !idsClientes.has(v.cliente_id)).length;\n  if (sinCliente) avisos.push(`VENTAS: ${sinCliente} fila(s) con cliente_id que no está en CLIENTES.`);\n  // Segmentos de fidelización recalculados en cada sincronización (columnas extra de BOT_CLIENTES_FUENTE).\n  const segmentos = Object.fromEntries(syncSegmentar({ clientes: clis, ventas: vents, ahora: ahoraIso }).map(c => [c.cliente_id, c]));\n  for (const c of clis) {\n    const s = segmentos[c.cliente_id];\n    Object.assign(c, { segmento: s.segmento, pedidos: s.pedidos, total_comprado: s.total_comprado, ultima_compra: s.ultima_compra });\n  }\n  return {\n    ok: true,\n    errores,\n    avisos: avisos.slice(0, 50),\n    hoja,\n    ahora: ahoraIso,\n    productos: prods,\n    clientes: clis,\n    ventas: vents,\n    config: [\n      { clave: 'sheet_fuente_id', valor: hoja.id, descripcion: 'Hoja fuente detectada por la sincronización.' },\n      { clave: 'ultima_sync', valor: ahoraIso, descripcion: 'Fecha de la última sincronización correcta.' },\n    ],\n    resumen: `${prods.length} productos, ${clis.length} clientes y ${vents.length} líneas de venta desde \"${hoja.nombre}\".`,\n  };\n}\n\n// Fila de BOT_ERRORES para una sincronización fallida.\nfunction filaErrorSync(resultado) {\n  return {\n    fecha: resultado.ahora, flujo: 'Mermín - Sincronizar Drive', nodo: 'Validar fuente',\n    mensaje: resultado.errores.join(' ').slice(0, 500), ejecucion_id: '', modo: 'sync',\n  };\n}\n\n// POST /config/drive: lo que encontró la búsqueda en la carpeta -> respuesta y filas de BOT_CONFIG.\nfunction conectarDrive({ url, archivos, correoServicio }) {\n  const folderId = extraerFolderId(url);\n  if (!folderId) return { ok: false, status: 400, error: 'No reconozco esa URL. Pega el enlace de la carpeta de Drive (…/drive/folders/<id>).' };\n  const hoja = elegirHojaFuente(archivos);\n  if (!hoja) {\n    const correo = syncTexto(correoServicio);\n    return {\n      ok: false, status: 403, folder_id: folderId, correo_servicio: correo,\n      error: `No veo ninguna hoja de cálculo en esa carpeta. Compártela${correo ? ` con ${correo}` : ' con la cuenta de servicio'} (como lector) y sube la plantilla ${PREFIJO_FUENTE}.`,\n    };\n  }\n  return {\n    ok: true, status: 200, folder_id: folderId, hoja,\n    config: [\n      { clave: 'drive_folder_id', valor: folderId, descripcion: 'Carpeta de Drive con la hoja MERMIN_FUENTE. Se llena desde el dashboard.' },\n      { clave: 'sheet_fuente_id', valor: hoja.id, descripcion: 'Hoja fuente detectada por la sincronización.' },\n    ],\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    extraerFolderId, elegirHojaFuente, prepararSync, filaErrorSync, conectarDrive, fechaFuente, telefonoFuente,\n    COLUMNAS_FUENTE, PREFIJO_FUENTE, MIME_SHEETS,\n  };\n}\n\n// ---- n8n ----\nconst filasDe = nombre => { try { return $(nombre).all().map(i => i.json); } catch (e) { return []; } };\nconst carpeta = $('Carpeta a sincronizar').first().json;\nconst ahora = new Date().toISOString();\nif (!carpeta.ok) return [{ json: { ok: false, errores: [carpeta.error], avisos: [], ahora } }];\nconst elegida = filasDe('Elegir hoja fuente')[0] || {};\n// Una pestaña que no existe devuelve un error (onError continúa): se toma como vacía.\nconst filas = nombre => filasDe(nombre).filter(r => r && !r.error);\nreturn [{ json: prepararSync({ hoja: elegida.hoja || null, productos: filas('Leer PRODUCTOS'), clientes: filas('Leer CLIENTES'), ventas: filas('Leer VENTAS'), ahora }) }];"
+      },
+      "id": "6adb49b2-cae8-4485-a47f-65652ab0ca40",
+      "name": "Validar fuente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "4513ea3e-3a48-4633-a8cd-b64cc7540d07",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bd0388dc-8c1c-48a8-aa6f-fd728f7aa398",
+      "name": "¿Fuente válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_PRODUCTOS",
+          "mode": "name"
+        },
+        "clear": "wholeSheet",
+        "keepFirstRow": true
+      },
+      "id": "b10b89b6-26bc-469e-ad80-0bb9fbf13e94",
+      "name": "Vaciar BOT_PRODUCTOS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nreturn $('Validar fuente').first().json.productos.map(json => ({ json }));"
+      },
+      "id": "1bb5ec0e-4b6d-4bc7-a586-9759d75cb60a",
+      "name": "Filas productos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_PRODUCTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sku": "={{ $json[\"sku\"] }}",
+            "nombre": "={{ $json[\"nombre\"] }}",
+            "categoria": "={{ $json[\"categoria\"] }}",
+            "precio": "={{ $json[\"precio\"] === '' ? null : $json[\"precio\"] }}",
+            "costo": "={{ $json[\"costo\"] === '' ? null : $json[\"costo\"] }}",
+            "stock": "={{ $json[\"stock\"] === '' ? null : $json[\"stock\"] }}",
+            "activo": "={{ $json[\"activo\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "sku",
+              "displayName": "sku",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "categoria",
+              "displayName": "categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "precio",
+              "displayName": "precio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "costo",
+              "displayName": "costo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stock",
+              "displayName": "stock",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "activo",
+              "displayName": "activo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "c9f401bc-45ea-4048-a7f3-7fecd64dd65d",
+      "name": "Escribir BOT_PRODUCTOS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CLIENTES_FUENTE",
+          "mode": "name"
+        },
+        "clear": "wholeSheet",
+        "keepFirstRow": true
+      },
+      "id": "fd4c1d70-6cc8-4abd-ab8a-c1aaaf8c3cf6",
+      "name": "Vaciar BOT_CLIENTES_FUENTE",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        160
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nreturn $('Validar fuente').first().json.clientes.map(json => ({ json }));"
+      },
+      "id": "fed65973-e8db-4cf7-a023-2debcc5dd1dc",
+      "name": "Filas clientes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CLIENTES_FUENTE",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cliente_id": "={{ $json[\"cliente_id\"] }}",
+            "nombre": "={{ $json[\"nombre\"] }}",
+            "telefono": "={{ $json[\"telefono\"] }}",
+            "email": "={{ $json[\"email\"] }}",
+            "tipo": "={{ $json[\"tipo\"] }}",
+            "fecha_registro": "={{ $json[\"fecha_registro\"] }}",
+            "acepta_marketing": "={{ $json[\"acepta_marketing\"] }}",
+            "segmento": "={{ $json[\"segmento\"] }}",
+            "pedidos": "={{ $json[\"pedidos\"] === '' ? null : $json[\"pedidos\"] }}",
+            "total_comprado": "={{ $json[\"total_comprado\"] === '' ? null : $json[\"total_comprado\"] }}",
+            "ultima_compra": "={{ $json[\"ultima_compra\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "cliente_id",
+              "displayName": "cliente_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_registro",
+              "displayName": "fecha_registro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "acepta_marketing",
+              "displayName": "acepta_marketing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "segmento",
+              "displayName": "segmento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pedidos",
+              "displayName": "pedidos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_comprado",
+              "displayName": "total_comprado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ultima_compra",
+              "displayName": "ultima_compra",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "c2a4323e-03ef-417c-a2f5-13af652b9631",
+      "name": "Escribir BOT_CLIENTES_FUENTE",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3300,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_VENTAS",
+          "mode": "name"
+        },
+        "clear": "wholeSheet",
+        "keepFirstRow": true
+      },
+      "id": "3174a8f3-c99c-408b-a923-829fb6f39bc5",
+      "name": "Vaciar BOT_VENTAS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        320
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nreturn $('Validar fuente').first().json.ventas.map(json => ({ json }));"
+      },
+      "id": "3e07790b-5efb-4e90-a35c-98eafcc52cad",
+      "name": "Filas ventas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_VENTAS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "={{ $json[\"fecha\"] }}",
+            "pedido_id": "={{ $json[\"pedido_id\"] }}",
+            "cliente_id": "={{ $json[\"cliente_id\"] }}",
+            "sku": "={{ $json[\"sku\"] }}",
+            "cantidad": "={{ $json[\"cantidad\"] === '' ? null : $json[\"cantidad\"] }}",
+            "total": "={{ $json[\"total\"] === '' ? null : $json[\"total\"] }}",
+            "canal": "={{ $json[\"canal\"] }}",
+            "codigo": "={{ $json[\"codigo\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pedido_id",
+              "displayName": "pedido_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cliente_id",
+              "displayName": "cliente_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sku",
+              "displayName": "sku",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cantidad",
+              "displayName": "cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total",
+              "displayName": "total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "canal",
+              "displayName": "canal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "codigo",
+              "displayName": "codigo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "811d308f-5449-42b4-a73c-4e49c03e8d8d",
+      "name": "Escribir BOT_VENTAS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3300,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nreturn ($('Validar fuente').first().json.config).map(json => ({ json }));"
+      },
+      "id": "77b0cec0-532d-4fa4-a0cc-7871cea64ce9",
+      "name": "Estado de la sincronización",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_CONFIG",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clave": "={{ $json.clave }}",
+            "valor": "={{ $json.valor }}",
+            "descripcion": "={{ $json.descripcion }}"
+          },
+          "matchingColumns": [
+            "clave"
+          ],
+          "schema": [
+            {
+              "id": "clave",
+              "displayName": "clave",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "valor",
+              "displayName": "valor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "descripcion",
+              "displayName": "descripcion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "ce96d3fa-2f0d-45e7-a112-84d4d54acfec",
+      "name": "Guardar ultima_sync",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3080,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n// Sincronización de la carpeta de Drive: el negocio deja ahí su hoja MERMIN_FUENTE (pestañas PRODUCTOS, CLIENTES y\n// VENTAS) y el flujo [8] la copia a BOT_PRODUCTOS, BOT_CLIENTES_FUENTE y BOT_VENTAS. El bot y el dashboard leen la\n// copia, nunca la fuente: si el negocio rompe su hoja, se registra el error y queda la última copia válida.\n// Sin dependencias: se usa en los nodos Code de n8n y en el simulador.\n\n// En n8n, fidelizacion.js va concatenado antes de este archivo en el nodo que valida; en Node se carga con require.\n// Se resuelve al usarla: los nodos que solo eligen la hoja o registran errores no incluyen fidelizacion.js.\nfunction syncSegmentar(args) { return (typeof segmentar === 'function' ? segmentar : require('./fidelizacion').segmentar)(args); }\n\nconst PREFIJO_FUENTE = 'MERMIN_FUENTE';\nconst MIME_SHEETS = 'application/vnd.google-apps.spreadsheet';\nconst COLUMNAS_FUENTE = {\n  PRODUCTOS: ['sku', 'nombre', 'categoria', 'precio', 'costo', 'stock', 'activo'],\n  CLIENTES: ['cliente_id', 'nombre', 'telefono', 'email', 'tipo', 'fecha_registro', 'acepta_marketing'],\n  VENTAS: ['fecha', 'pedido_id', 'cliente_id', 'sku', 'cantidad', 'total', 'canal', 'codigo'],\n};\nconst TIPOS_CLIENTE = ['EMPRESA', 'PERSONA'];\nconst CANALES_VENTA = ['WEB', 'WHATSAPP', 'TIENDA'];\n\nfunction syncTexto(v) { return v === undefined || v === null ? '' : String(v).trim(); }\nfunction syncClave(v) { return syncTexto(v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\\s+/g, '_'); }\nfunction syncNumero(v) {\n  const s = syncTexto(v).replace(/^S\\/\\s*/i, '').replace(/\\s/g, '');\n  if (!s) return null;\n  // \"1,234.50\" o \"1234,50\": la coma es decimal solo si no hay punto.\n  const limpio = s.includes('.') ? s.replace(/,/g, '') : s.replace(',', '.');\n  const n = Number(limpio);\n  return Number.isFinite(n) ? n : null;\n}\n\n// Fecha de la hoja -> YYYY-MM-DD. Acepta 2026-10-17, 17/10/2026, 17/10/26, ISO con hora y el número de serie de Sheets.\nfunction fechaFuente(v) {\n  const s = syncTexto(v);\n  if (!s) return '';\n  let g;\n  if ((g = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/))) return armarFecha(+g[1], +g[2], +g[3]);\n  if ((g = s.match(/^(\\d{1,2})[/.-](\\d{1,2})[/.-](\\d{2}|\\d{4})$/))) return armarFecha(g[3].length === 2 ? 2000 + +g[3] : +g[3], +g[2], +g[1]);\n  if (/^\\d{5}(\\.\\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 864e5).toISOString().slice(0, 10);\n  return '';\n}\nfunction armarFecha(y, m, d) {\n  const t = new Date(Date.UTC(y, m - 1, d));\n  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : '';\n}\n\nfunction telefonoFuente(v) {\n  const d = syncTexto(v).replace(/\\D/g, '');\n  if (/^9\\d{8}$/.test(d)) return `51${d}`;\n  return d.length >= 10 ? d : '';\n}\nfunction siNo(v, porDefecto) {\n  const s = syncClave(v);\n  if (!s) return porDefecto;\n  return ['si', 'sí', 's', 'yes', 'y', 'true', '1', 'x'].includes(s) ? 'SI' : 'NO';\n}\n\n// URL de la carpeta (o el id suelto) -> folderId.\nfunction extraerFolderId(url) {\n  const s = syncTexto(url);\n  let g;\n  if ((g = s.match(/\\/folders\\/([A-Za-z0-9_-]{10,})/))) return g[1];\n  if ((g = s.match(/[?&]id=([A-Za-z0-9_-]{10,})/))) return g[1];\n  if (/^[A-Za-z0-9_-]{10,}$/.test(s)) return s;\n  return '';\n}\n\n// Archivos de la carpeta (búsqueda de Drive) -> la hoja fuente: la que empieza por MERMIN_FUENTE o la primera Sheet.\nfunction elegirHojaFuente(archivos) {\n  const hojas = (archivos || []).filter(a => a && syncTexto(a.id) && (!a.mimeType || a.mimeType === MIME_SHEETS));\n  const porNombre = hojas.find(a => syncTexto(a.name).toUpperCase().startsWith(PREFIJO_FUENTE));\n  const elegida = porNombre || hojas[0];\n  return elegida ? { id: syncTexto(elegida.id), nombre: syncTexto(elegida.name) } : null;\n}\n\n// Filas leídas de una pestaña -> filas con claves normalizadas, sin filas vacías.\nfunction filasLimpias(filas) {\n  return (filas || [])\n    .map(f => {\n      const fila = {};\n      for (const k of Object.keys(f || {})) if (k !== 'row_number') fila[syncClave(k)] = f[k];\n      return fila;\n    })\n    .filter(f => Object.values(f).some(v => syncTexto(v) !== ''));\n}\n\nfunction columnasFaltantes(pestana, filas) {\n  const vistas = new Set();\n  for (const f of filas) for (const k of Object.keys(f)) vistas.add(k);\n  return COLUMNAS_FUENTE[pestana].filter(c => !vistas.has(c));\n}\n\nfunction normalizarProductos(filas, avisos) {\n  const vistos = new Set();\n  const productos = [];\n  for (const f of filas) {\n    const sku = syncTexto(f.sku);\n    if (!sku) { avisos.push(`PRODUCTOS: fila sin sku omitida (${syncTexto(f.nombre) || 'sin nombre'}).`); continue; }\n    if (vistos.has(sku)) { avisos.push(`PRODUCTOS: sku ${sku} repetido; se usa la primera fila.`); continue; }\n    vistos.add(sku);\n    const precio = syncNumero(f.precio);\n    if (precio === null) avisos.push(`PRODUCTOS: ${sku} sin precio.`);\n    const costo = syncNumero(f.costo);\n    const stock = syncNumero(f.stock);\n    productos.push({\n      sku, nombre: syncTexto(f.nombre), categoria: syncTexto(f.categoria),\n      precio: precio === null ? '' : precio, costo: costo === null ? '' : costo,\n      stock: stock === null ? '' : Math.floor(stock), activo: siNo(f.activo, 'SI'),\n    });\n  }\n  return productos;\n}\n\nfunction normalizarClientes(filas, avisos) {\n  const clientes = [];\n  const vistos = new Set();\n  for (const f of filas) {\n    const id = syncTexto(f.cliente_id);\n    if (!id) { avisos.push('CLIENTES: fila sin cliente_id omitida.'); continue; }\n    if (vistos.has(id)) { avisos.push(`CLIENTES: cliente_id ${id} repetido; se usa la primera fila.`); continue; }\n    vistos.add(id);\n    const tipo = syncTexto(f.tipo).toUpperCase();\n    if (tipo && !TIPOS_CLIENTE.includes(tipo)) avisos.push(`CLIENTES: ${id} tiene tipo \"${tipo}\"; se toma como PERSONA.`);\n    clientes.push({\n      cliente_id: id, nombre: syncTexto(f.nombre), telefono: telefonoFuente(f.telefono), email: syncTexto(f.email).toLowerCase(),\n      tipo: tipo === 'EMPRESA' ? 'EMPRESA' : 'PERSONA', fecha_registro: fechaFuente(f.fecha_registro),\n      acepta_marketing: siNo(f.acepta_marketing, 'NO'),\n    });\n  }\n  return clientes;\n}\n\nfunction normalizarVentas(filas, productos, avisos) {\n  const precios = Object.fromEntries(productos.map(p => [p.sku, p.precio]));\n  const ventas = [];\n  for (const f of filas) {\n    const fecha = fechaFuente(f.fecha);\n    const pedido = syncTexto(f.pedido_id);\n    if (!fecha || !pedido) { avisos.push(`VENTAS: fila sin fecha válida o sin pedido_id omitida (${pedido || syncTexto(f.fecha) || 'vacía'}).`); continue; }\n    const cantidad = syncNumero(f.cantidad);\n    let total = syncNumero(f.total);\n    const sku = syncTexto(f.sku);\n    if (total === null && cantidad !== null && typeof precios[sku] === 'number') total = Math.round(precios[sku] * cantidad * 100) / 100;\n    const canal = syncTexto(f.canal).toUpperCase();\n    ventas.push({\n      fecha, pedido_id: pedido, cliente_id: syncTexto(f.cliente_id), sku,\n      cantidad: cantidad === null ? '' : cantidad, total: total === null ? '' : total,\n      canal: CANALES_VENTA.includes(canal) ? canal : canal || 'TIENDA', codigo: syncTexto(f.codigo).toUpperCase(),\n    });\n  }\n  return ventas;\n}\n\n// Lo leído de la hoja fuente -> qué escribir. Si falta una columna o no hay productos, no se escribe nada.\nfunction prepararSync({ hoja, productos, clientes, ventas, ahora }) {\n  const ahoraIso = ahora || new Date().toISOString();\n  const errores = [];\n  const avisos = [];\n  if (!hoja) {\n    return { ok: false, errores: [`No hay una hoja de cálculo en la carpeta. Sube la plantilla ${PREFIJO_FUENTE}.`], avisos, ahora: ahoraIso };\n  }\n  const leidas = { PRODUCTOS: filasLimpias(productos), CLIENTES: filasLimpias(clientes), VENTAS: filasLimpias(ventas) };\n  for (const pestana of Object.keys(COLUMNAS_FUENTE)) {\n    // Una pestaña vacía no deja ver sus cabeceras: solo se exige que PRODUCTOS tenga filas.\n    if (!leidas[pestana].length) {\n      if (pestana === 'PRODUCTOS') errores.push('La pestaña PRODUCTOS no tiene filas (o no existe).');\n      continue;\n    }\n    const faltan = columnasFaltantes(pestana, leidas[pestana]);\n    if (faltan.length) errores.push(`A la pestaña ${pestana} le faltan columnas: ${faltan.join(', ')}.`);\n  }\n  if (errores.length) return { ok: false, errores, avisos, hoja, ahora: ahoraIso };\n\n  const prods = normalizarProductos(leidas.PRODUCTOS, avisos);\n  const clis = normalizarClientes(leidas.CLIENTES, avisos);\n  const vents = normalizarVentas(leidas.VENTAS, prods, avisos);\n  const idsClientes = new Set(clis.map(c => c.cliente_id));\n  const sinCliente = vents.filter(v => v.cliente_id && !idsClientes.has(v.cliente_id)).length;\n  if (sinCliente) avisos.push(`VENTAS: ${sinCliente} fila(s) con cliente_id que no está en CLIENTES.`);\n  // Segmentos de fidelización recalculados en cada sincronización (columnas extra de BOT_CLIENTES_FUENTE).\n  const segmentos = Object.fromEntries(syncSegmentar({ clientes: clis, ventas: vents, ahora: ahoraIso }).map(c => [c.cliente_id, c]));\n  for (const c of clis) {\n    const s = segmentos[c.cliente_id];\n    Object.assign(c, { segmento: s.segmento, pedidos: s.pedidos, total_comprado: s.total_comprado, ultima_compra: s.ultima_compra });\n  }\n  return {\n    ok: true,\n    errores,\n    avisos: avisos.slice(0, 50),\n    hoja,\n    ahora: ahoraIso,\n    productos: prods,\n    clientes: clis,\n    ventas: vents,\n    config: [\n      { clave: 'sheet_fuente_id', valor: hoja.id, descripcion: 'Hoja fuente detectada por la sincronización.' },\n      { clave: 'ultima_sync', valor: ahoraIso, descripcion: 'Fecha de la última sincronización correcta.' },\n    ],\n    resumen: `${prods.length} productos, ${clis.length} clientes y ${vents.length} líneas de venta desde \"${hoja.nombre}\".`,\n  };\n}\n\n// Fila de BOT_ERRORES para una sincronización fallida.\nfunction filaErrorSync(resultado) {\n  return {\n    fecha: resultado.ahora, flujo: 'Mermín - Sincronizar Drive', nodo: 'Validar fuente',\n    mensaje: resultado.errores.join(' ').slice(0, 500), ejecucion_id: '', modo: 'sync',\n  };\n}\n\n// POST /config/drive: lo que encontró la búsqueda en la carpeta -> respuesta y filas de BOT_CONFIG.\nfunction conectarDrive({ url, archivos, correoServicio }) {\n  const folderId = extraerFolderId(url);\n  if (!folderId) return { ok: false, status: 400, error: 'No reconozco esa URL. Pega el enlace de la carpeta de Drive (…/drive/folders/<id>).' };\n  const hoja = elegirHojaFuente(archivos);\n  if (!hoja) {\n    const correo = syncTexto(correoServicio);\n    return {\n      ok: false, status: 403, folder_id: folderId, correo_servicio: correo,\n      error: `No veo ninguna hoja de cálculo en esa carpeta. Compártela${correo ? ` con ${correo}` : ' con la cuenta de servicio'} (como lector) y sube la plantilla ${PREFIJO_FUENTE}.`,\n    };\n  }\n  return {\n    ok: true, status: 200, folder_id: folderId, hoja,\n    config: [\n      { clave: 'drive_folder_id', valor: folderId, descripcion: 'Carpeta de Drive con la hoja MERMIN_FUENTE. Se llena desde el dashboard.' },\n      { clave: 'sheet_fuente_id', valor: hoja.id, descripcion: 'Hoja fuente detectada por la sincronización.' },\n    ],\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = {\n    extraerFolderId, elegirHojaFuente, prepararSync, filaErrorSync, conectarDrive, fechaFuente, telefonoFuente,\n    COLUMNAS_FUENTE, PREFIJO_FUENTE, MIME_SHEETS,\n  };\n}\n\n// ---- n8n ----\nreturn [{ json: { ...filaErrorSync($('Validar fuente').first().json), ejecucion_id: String($execution.id || '') } }];"
+      },
+      "id": "a3f09a4d-c3ab-4d76-afba-d51cd1380eb8",
+      "name": "Fila de error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Configuración').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "BOT_ERRORES",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "={{ $json[\"fecha\"] }}",
+            "flujo": "={{ $json[\"flujo\"] }}",
+            "nodo": "={{ $json[\"nodo\"] }}",
+            "mensaje": "={{ $json[\"mensaje\"] }}",
+            "ejecucion_id": "={{ $json[\"ejecucion_id\"] }}",
+            "modo": "={{ $json[\"modo\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "flujo",
+              "displayName": "flujo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nodo",
+              "displayName": "nodo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "mensaje",
+              "displayName": "mensaje",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ejecucion_id",
+              "displayName": "ejecucion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "modo",
+              "displayName": "modo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "590351ec-dab4-4df0-a85e-d41e12d7fb28",
+      "name": "Registrar error de sync",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3080,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ---- n8n ----\nconst r = $('Validar fuente').first().json;\nreturn [{ json: { ok: r.ok, errores: r.errores || [], avisos: r.avisos || [], resumen: r.resumen || '', ultima_sync: r.ok ? r.ahora : '' } }];"
+      },
+      "id": "559b3319-bd4d-458e-abac-d3c6eb0af0fa",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "¿Fuente válida?": {
+      "main": [
+        [
+          {
+            "node": "Vaciar BOT_PRODUCTOS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Vaciar BOT_CLIENTES_FUENTE",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Vaciar BOT_VENTAS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Estado de la sincronización",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fila de error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vaciar BOT_PRODUCTOS": {
+      "main": [
+        [
+          {
+            "node": "Filas productos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas productos": {
+      "main": [
+        [
+          {
+            "node": "Escribir BOT_PRODUCTOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vaciar BOT_CLIENTES_FUENTE": {
+      "main": [
+        [
+          {
+            "node": "Filas clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas clientes": {
+      "main": [
+        [
+          {
+            "node": "Escribir BOT_CLIENTES_FUENTE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vaciar BOT_VENTAS": {
+      "main": [
+        [
+          {
+            "node": "Filas ventas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas ventas": {
+      "main": [
+        [
+          {
+            "node": "Escribir BOT_VENTAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 10 minutos": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cambio en la carpeta": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desde la API": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Leer configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer configuración": {
+      "main": [
+        [
+          {
+            "node": "Carpeta a sincronizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carpeta a sincronizar": {
+      "main": [
+        [
+          {
+            "node": "¿Hay carpeta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay carpeta?": {
+      "main": [
+        [
+          {
+            "node": "Buscar hojas en la carpeta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar hojas en la carpeta": {
+      "main": [
+        [
+          {
+            "node": "Elegir hoja fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elegir hoja fuente": {
+      "main": [
+        [
+          {
+            "node": "¿Hay hoja fuente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay hoja fuente?": {
+      "main": [
+        [
+          {
+            "node": "Leer PRODUCTOS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer PRODUCTOS": {
+      "main": [
+        [
+          {
+            "node": "Leer CLIENTES",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer CLIENTES": {
+      "main": [
+        [
+          {
+            "node": "Leer VENTAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer VENTAS": {
+      "main": [
+        [
+          {
+            "node": "Validar fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar fuente": {
+      "main": [
+        [
+          {
+            "node": "¿Fuente válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estado de la sincronización": {
+      "main": [
+        [
+          {
+            "node": "Guardar ultima_sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila de error": {
+      "main": [
+        [
+          {
+            "node": "Registrar error de sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar error de sync": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
