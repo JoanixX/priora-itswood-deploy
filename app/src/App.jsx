@@ -1,8 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { AppProvider } from './context/AppContext.jsx';
 import Layout from './components/Layout.jsx';
 import RequiereSesion from './components/RequiereSesion.jsx';
+import IrALanding from './components/IrALanding.jsx';
 
 const Login = lazy(() => import('./pages/Login.jsx'));
 const Inicio = lazy(() => import('./pages/Inicio.jsx'));
@@ -26,7 +27,8 @@ export default function App() {
   return (
     <Suspense fallback={<p className="muted" style={{ padding: '2rem' }}>Cargando…</p>}>
       <Routes>
-        <Route path="/" element={<Navigate to="/app" replace />} />
+        {/* La entrada es la landing (VITE_LANDING_URL); el login solo se abre desde su botón "Iniciar sesión". */}
+        <Route path="/" element={<IrALanding />} />
         <Route path="/login" element={<Login />} />
         <Route path="/app" element={<Panel />}>
           <Route index element={<Inicio />} />
@@ -37,7 +39,7 @@ export default function App() {
           <Route path="datos" element={<Datos />} />
           <Route path="ajustes" element={<Ajustes />} />
         </Route>
-        <Route path="*" element={<Navigate to="/app" replace />} />
+        <Route path="*" element={<IrALanding />} />
       </Routes>
     </Suspense>
   );
