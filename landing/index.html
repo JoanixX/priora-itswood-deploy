@@ -55,7 +55,10 @@
       <ul class="nav-links" data-list="nav.links">
         <template><li><a class="nav-link" data-item-href="href" data-item="texto"></a></li></template>
       </ul>
-      <a href="#contacto" class="btn btn-principal btn-sm" data-app-path="/app" data-text="nav.cta"></a>
+      <div class="nav-acciones">
+        <a href="#contacto" class="btn btn-vidrio btn-sm" data-app-path="/login?volver=/app" data-requiere-app data-text="nav.login"></a>
+        <a href="#contacto" class="btn btn-principal btn-sm" data-app-path="/login?volver=/app" data-text="nav.cta"></a>
+      </div>
     </div>
   </nav>
 </header>
@@ -69,8 +72,8 @@
       <h1 id="hero-titulo" data-text="hero.titulo"></h1>
       <p class="hero-subtitulo" data-text="hero.subtitulo"></p>
       <div class="hero-botones">
-        <a href="#contacto" class="btn btn-principal" data-app-path="/app" data-text="hero.ctaPrincipal"></a>
-        <a href="#demo" class="btn btn-vidrio" data-app-path="/app/mermin" data-requiere-app data-text="hero.ctaSecundario"></a>
+        <a href="#contacto" class="btn btn-principal" data-app-path="/login?volver=/app" data-text="hero.ctaPrincipal"></a>
+        <a href="#demo" class="btn btn-vidrio" data-app-path="/login?volver=/app/mermin" data-requiere-app data-text="hero.ctaSecundario"></a>
       </div>
     </div>
 
@@ -210,7 +213,7 @@
       <h2 id="demo-titulo" data-text="demo.titulo"></h2>
       <p class="seccion-texto" data-text="demo.texto"></p>
       <p class="demo-nota" data-text="demo.nota"></p>
-      <a class="btn btn-principal" href="#demo" data-app-path="/app/mermin" data-text="demo.cta"></a>
+      <a class="btn btn-principal" href="#demo" data-app-path="/login?volver=/app/mermin" data-text="demo.cta"></a>
     </div>
   </section>
 
@@ -220,7 +223,7 @@
       <h2 id="cierre-titulo" data-text="cierre.titulo"></h2>
       <p class="seccion-texto" data-text="cierre.texto"></p>
       <div class="cierre-botones">
-        <a class="btn btn-principal" href="#contacto" data-app-path="/app" data-text="cierre.cta"></a>
+        <a class="btn btn-principal" href="#contacto" data-app-path="/login?volver=/app" data-text="cierre.cta"></a>
         <a class="btn btn-vidrio" data-email data-text="cierre.escribenos"></a>
       </div>
     </div>

@@ -2,8 +2,9 @@
 
 window.PRIORA_CONFIG = {
     // URL base de la app, sin barra final (p. ej. 'https://priora-app.vercel.app').
-    // "Quiero Priora" lleva a APP_URL + '/app' y "Ver demo" a APP_URL + '/app/mermin'.
-    // Mientras sea '#': se ocultan la sección Demo y los botones "Ver demo",
+    // La landing es la entrada: "Iniciar sesión" y "Quiero Priora" llevan al login de la app
+    // (APP_URL + '/login?volver=/app') y "Ver demo" al login y luego a Mermín ('/login?volver=/app/mermin').
+    // Mientras sea '#': se ocultan "Iniciar sesión", la sección Demo y los botones "Ver demo",
     // y "Quiero Priora" lleva al cierre de la página.
     APP_URL: '#',
 

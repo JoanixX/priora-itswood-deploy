@@ -22,6 +22,7 @@ window.PRIORA_CONTENT = {
             { href: '#caso-its-wood', texto: 'Caso ITS WOOD' },
             { href: '#demo', texto: 'Demo' }
         ],
+        login: 'Iniciar sesión',
         cta: 'Quiero Priora'
     },
 

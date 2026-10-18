@@ -4,8 +4,8 @@
 
 // ============================================
 // APP LINKS (APP_URL en assets/scripts/config.js)
-// Con una URL real: data-app-path="/app" -> APP_URL + "/app".
-// Mientras APP_URL sea '#': se ocultan los nodos data-requiere-app (sección Demo, "Ver demo")
+// Con una URL real: data-app-path="/login?volver=/app" -> APP_URL + "/login?volver=/app".
+// Mientras APP_URL sea '#': se ocultan los nodos data-requiere-app (sección Demo, "Ver demo", "Iniciar sesión")
 // y los links del navbar que apuntan a ellos; el resto de botones conserva su href (#contacto).
 // ============================================
 
