@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Lightbulb, Megaphone, Users, Check } from 'lucide-react';
+import { useApp } from '../context/AppContext.jsx';
 import { listarSegmentos, obtenerRecomendaciones } from '../services/segmentos.js';
 import { DIAS_INACTIVO } from '../lib/segmentos.js';
 import { formatoFecha, formatoSoles } from '../lib/format.js';
@@ -31,13 +32,14 @@ const PASOS = [
 ];
 
 export default function Fidelizacion() {
+  const { ventas } = useApp();
   const [segmentos, setSegmentos] = useState(null);
   const [activo, setActivo] = useState(null);
   const [recos, setRecos] = useState(null);
   const [borrador, setBorrador] = useState('');
   const detalle = useRef(null);
 
-  useEffect(() => { listarSegmentos().then(setSegmentos).catch(() => setSegmentos([])); }, []);
+  useEffect(() => { listarSegmentos().then(setSegmentos).catch(() => setSegmentos([])); }, [ventas]);
 
   const seg = segmentos?.find((x) => x.id === activo);
   const lista = recos?.recomendaciones || [];

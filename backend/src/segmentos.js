@@ -41,12 +41,16 @@ export function calcularSegmentos(ventas, hoy = hoyISO()) {
       monto: Math.round(lista.reduce((a, c) => a + c.monto, 0) * 100) / 100,
       ultima: lista.reduce((a, c) => (c.ultima && (!a || c.ultima > a) ? c.ultima : a), null),
       top_productos: Object.entries(productos).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([nombre, unidades]) => ({ nombre, unidades })),
+      lista_clientes: lista.map(({ alias, pedidos, monto, ultima }) => ({ alias, pedidos, monto, ultima })),
     };
   });
 }
 
-/** GET /segmentos: resumen del contrato. */
-export const resumenSegmentos = (ventas) => calcularSegmentos(ventas).map((s) => ({ id: s.id, nombre: s.nombre, clientes: s.tamano, monto: s.monto, ultima_compra: s.ultima }));
+/** GET /segmentos: resumen del contrato (más lista_clientes y top_productos para actualizar Fidelización al sincronizar). */
+export const resumenSegmentos = (ventas) => calcularSegmentos(ventas).map((s) => ({
+  id: s.id, nombre: s.nombre, clientes: s.tamano, monto: s.monto, ultima_compra: s.ultima,
+  lista_clientes: s.lista_clientes, top_productos: s.top_productos,
+}));
 
 const COMPLEMENTOS = [
   [/tabla|quesera/i, 'Tablas', 'Cuchillo para queso o Toppers para copas'],

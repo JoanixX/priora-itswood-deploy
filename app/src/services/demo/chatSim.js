@@ -180,10 +180,12 @@ function avanzar(conv, entrada, config) {
       if (!fecha) return [{ texto: 'Dime la fecha como día/mes, por ejemplo 15/12.' }];
       b.fecha_requerida = fecha;
       conv.paso = 'producto';
-      const lista = b.tipo === 'empresa' ? (/navidad/i.test(b.ocasion) ? SUGERIDOS.empresaNavidad : SUGERIDOS.empresa) : SUGERIDOS.persona;
+      const ids = b.tipo === 'empresa' ? (/navidad/i.test(b.ocasion) ? SUGERIDOS.empresaNavidad : SUGERIDOS.empresa) : SUGERIDOS.persona;
+      let lista = ids.map(producto).filter(Boolean);
+      if (!lista.length) lista = demo.catalogo.filter((p) => p.stock === null || p.stock > 0).slice(0, 3);
       return [{
         texto: `Para ${formatoFecha(fecha)} te recomiendo estos. Precios por unidad:`,
-        botones: lista.map(producto).filter(Boolean).map((p) => boton(`prod:${p.id}`, `${p.nombre} · ${formatoSoles(p.precio)}`)),
+        botones: lista.map((p) => boton(`prod:${p.id}`, `${p.nombre} · ${formatoSoles(p.precio)}`)),
       }];
     }
     case 'producto': {

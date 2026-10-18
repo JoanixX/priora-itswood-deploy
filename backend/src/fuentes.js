@@ -38,9 +38,132 @@ export function ventasDesdeFilas(filas, minimoEmpresa = 12) {
       fecha_pedido: parseFecha(valor(f, 'fecha de pedido', 'fecha')), fecha_entrega: parseFecha(valor(f, 'fecha de entrega')),
       plataforma: String(valor(f, 'plataforma')).trim() || 'Otro', distrito: String(valor(f, 'distrito')).trim(),
       producto: String(valor(f, 'producto')).trim(), cantidad, precio_unitario: precio, delivery, monto,
-      estado: String(valor(f, 'estado')).trim(), grabado: /grab|logo|nombre|frase|personaliz/i.test(String(valor(f, 'detalles', 'personalizacion'))),
+      estado: String(valor(f, 'estado')).trim() || 'Pendiente', grabado: /grab|logo|nombre|frase|personaliz/i.test(String(valor(f, 'detalles', 'personalizacion'))),
     };
   }).filter((v) => v.cliente && v.producto);
+}
+
+/** Filas de una hoja de pedidos → pedidos en la forma del almacén. */
+export function pedidosDesdeFilas(filas, minimoEmpresa = 12, catalogo = []) {
+  return filas.map((f, i) => {
+    const clienteNombre = String(valor(f, 'cliente')).trim();
+    const cantidad = Number.parseInt(valor(f, 'cantidad'), 10) || 1;
+    const tipoTxt = String(valor(f, 'tipo (empresa/persona)', 'tipo')).toLowerCase();
+    const tipo = tipoTxt.startsWith('emp') ? 'empresa' : tipoTxt.startsWith('per') ? 'persona' : deducirTipo(clienteNombre, cantidad, minimoEmpresa);
+    const prodNombre = String(valor(f, 'producto')).trim();
+    const delCat = catalogo.find((p) => p.nombre.toLowerCase() === prodNombre.toLowerCase());
+    const precio = parseMonto(valor(f, 'precio unitario', 'precio')) ?? delCat?.precio ?? 0;
+    const estadoRaw = String(valor(f, 'estado')).trim().toLowerCase();
+    const estado = ['nuevo', 'derivado', 'confirmado'].includes(estadoRaw) ? estadoRaw : 'nuevo';
+    const fechaPedido = parseFecha(valor(f, 'fecha', 'fecha de pedido')) || new Date().toISOString().slice(0, 10);
+    return {
+      id: String(valor(f, 'id')).trim() || `PED-H${String(i + 1).padStart(3, '0')}`,
+      creado_en: `${fechaPedido}T12:00:00.000Z`,
+      estado,
+      ejemplo: false,
+      cliente: {
+        nombre: tipo === 'persona' ? clienteNombre : null,
+        empresa: tipo === 'empresa' ? clienteNombre : null,
+        telefono: String(valor(f, 'telefono') || '').trim() || null,
+        correo: String(valor(f, 'correo') || '').trim() || null,
+        tipo,
+        ya_compro_antes: false,
+      },
+      ocasion: String(valor(f, 'ocasion') || '').trim() || null,
+      cantidad_total: cantidad,
+      fecha_requerida: parseFecha(valor(f, 'fecha requerida', 'fecha de entrega')),
+      productos: [{ producto_id: delCat?.id || `PR-H${i + 1}`, nombre: prodNombre, cantidad, precio_unitario: precio }],
+      personalizacion: String(valor(f, 'personalizacion', 'detalles') || '').trim() || null,
+      entrega: null,
+      flags: {},
+      resumen: `Importado desde hoja de pedidos (${cantidad} × ${prodNombre}).`,
+      conversacion_id: null,
+    };
+  }).filter((p) => (p.cliente.nombre || p.cliente.empresa) && p.productos[0]?.nombre);
+}
+
+/** Filas de una hoja de clientes → clientes en la forma del almacén. */
+export function clientesDesdeFilas(filas, minimoEmpresa = 12) {
+  return filas.map((f) => {
+    const nombre = String(valor(f, 'cliente', 'nombre')).trim();
+    const tipoTxt = String(valor(f, 'tipo (empresa/persona)', 'tipo')).toLowerCase();
+    const tipo = tipoTxt.startsWith('emp') ? 'empresa' : tipoTxt.startsWith('per') ? 'persona' : deducirTipo(nombre, 0, minimoEmpresa);
+    return {
+      cliente: nombre,
+      nombre: tipo === 'persona' ? nombre : null,
+      empresa: tipo === 'empresa' ? nombre : null,
+      tipo,
+      telefono: String(valor(f, 'telefono') || '').trim() || null,
+      correo: String(valor(f, 'correo', 'email') || '').trim() || null,
+      distrito: String(valor(f, 'distrito') || '').trim() || null,
+      pedidos: Number.parseInt(valor(f, 'pedidos'), 10) || 1,
+      ultimo_pedido: String(valor(f, 'ultimo_pedido', 'ultima compra') || '').trim() || null,
+    };
+  }).filter((c) => c.nombre || c.empresa);
+}
+
+function aplicarFilasAFuente(almacen, fuente, filas) {
+  const minEmp = almacen.datos.config?.reglas?.minimo_empresa ?? 12;
+  if (!almacen.datos.fuentesFilas) almacen.datos.fuentesFilas = {};
+  if (fuente.tipo === 'ventas') {
+    const ventas = ventasDesdeFilas(filas, minEmp);
+    almacen.datos.ventas = ventas;
+    almacen.datos.fuentesFilas[fuente.id] = ventas;
+    almacen.guardar('ventas');
+  } else if (fuente.tipo === 'catalogo') {
+    const cat = catalogoDesdeFilas(filas);
+    almacen.datos.catalogo = cat;
+    almacen.datos.fuentesFilas[fuente.id] = cat;
+    almacen.guardar('catalogo');
+  } else if (fuente.tipo === 'pedidos') {
+    const peds = pedidosDesdeFilas(filas, minEmp, almacen.datos.catalogo);
+    const idsNuevos = new Set(peds.map((p) => p.id));
+    almacen.datos.pedidos = [...peds, ...almacen.datos.pedidos.filter((p) => !idsNuevos.has(p.id))];
+    almacen.datos.fuentesFilas[fuente.id] = peds;
+    almacen.guardar('pedidos');
+  } else if (fuente.tipo === 'clientes') {
+    const clis = clientesDesdeFilas(filas, minEmp);
+    almacen.datos.clientes = clis;
+    almacen.datos.fuentesFilas[fuente.id] = clis;
+    almacen.guardar('clientes');
+  }
+}
+
+export function obtenerDatosFuente(almacen, id) {
+  const fuente = almacen.datos.fuentes.find((x) => x.id === id);
+  if (!fuente) return null;
+  const guardadas = almacen.datos.fuentesFilas?.[id];
+  const respaldo = {
+    ventas: almacen.datos.ventas,
+    catalogo: almacen.datos.catalogo,
+    pedidos: almacen.datos.pedidos,
+    clientes: almacen.datos.clientes,
+  }[fuente.tipo] || [];
+  const filas = guardadas || respaldo;
+  return { id: fuente.id, nombre: fuente.nombre, tipo: fuente.tipo, estado: fuente.estado, filas };
+}
+
+export function fuenteDesdeArchivo(almacen, { nombreArchivo, filas, tipo }) {
+  if (!TIPOS[tipo]) return { status: 400, error: `tipo debe ser ${Object.keys(TIPOS).join(', ')}` };
+  if (!filas.length) return { status: 400, error: 'El archivo está vacío o no tiene filas.' };
+  const faltan = TIPOS[tipo].requeridas.filter((c) => !(c in filas[0]));
+  if (faltan.length) return { status: 400, error: `Al archivo le faltan columnas: ${faltan.join(', ')}.` };
+  const fuente = {
+    id: `F-${Date.now().toString(36)}`,
+    tipo,
+    nombre: `${nombreArchivo || TIPOS[tipo].nombre}`,
+    url: `archivo://${nombreArchivo || tipo}`,
+    recurso_id: `archivo:${nombreArchivo || tipo}`,
+    estado: 'ok',
+    ultima_sync: new Date().toISOString(),
+    filas: filas.length,
+    error: null,
+  };
+  aplicarFilasAFuente(almacen, fuente, filas);
+  almacen.datos.fuentes.unshift(fuente);
+  almacen.guardar('fuentes');
+  agregarNotificacion(almacen, { tipo: 'sync', titulo: `Hoja ${TIPOS[tipo].nombre} sincronizada`, texto: `${filas.length} filas leídas`, enlace: `/app/datos?ver=${fuente.id}` });
+  return { status: 201, fuente };
 }
 
 export function nuevaFuente(almacen, { url, tipo }) {
@@ -82,13 +205,7 @@ export async function sincronizar(almacen, google, fuente) {
     if (!filas.length) throw new Error(`La pestaña "${pestana}" está vacía.`);
     if (faltan.length) throw new Error(`A la pestaña "${pestana}" le faltan columnas: ${faltan.join(', ')}.`);
 
-    if (fuente.tipo === 'ventas') {
-      almacen.datos.ventas = ventasDesdeFilas(filas, almacen.datos.config.reglas.minimo_empresa);
-      almacen.guardar('ventas');
-    } else if (fuente.tipo === 'catalogo') {
-      almacen.datos.catalogo = catalogoDesdeFilas(filas);
-      almacen.guardar('catalogo');
-    }
+    aplicarFilasAFuente(almacen, fuente, filas);
     Object.assign(fuente, { estado: 'ok', nombre: `${nombre || info.titulo} · ${pestana}`, filas: filas.length, ultima_sync: new Date().toISOString(), error: null });
     agregarNotificacion(almacen, { tipo: 'sync', titulo: `Hoja ${TIPOS[fuente.tipo].nombre} sincronizada`, texto: `${filas.length} filas leídas`, enlace: '/app/datos' });
   } catch (e) {
@@ -99,3 +216,4 @@ export async function sincronizar(almacen, google, fuente) {
   almacen.guardar('fuentes');
   return fuente;
 }
+

@@ -1,18 +1,27 @@
 import { pedir, conRespaldo } from './api.js';
 import { demo, agregarNotificacion } from './demo/store.js';
 import { pedidoMermin, ventasAPedidos } from '../lib/historico.js';
-import ventas from '../data/ventas_2026.demo.json';
 
-// El histórico anonimizado siempre es local: el backend no lo expone.
-const HISTORICO = ventasAPedidos(ventas);
-export const obtenerVentasHistoricas = () => ventas;
+export const obtenerVentasHistoricas = () => demo.ventas;
+
+export async function listarVentas() {
+  return conRespaldo(
+    async () => {
+      const remotas = await pedir('/ventas');
+      if (Array.isArray(remotas) && remotas.length) demo.ventas = remotas;
+      return demo.ventas;
+    },
+    async () => demo.ventas,
+    { rutaPropuesta: true },
+  );
+}
 
 export async function listarPedidos() {
   const mermin = await conRespaldo(
     async () => (await pedir('/pedidos')).map((p) => pedidoMermin(p, { desdeBackend: true })),
     async () => demo.pedidos.map((p) => pedidoMermin(p)),
   );
-  return [...mermin, ...HISTORICO];
+  return [...mermin, ...ventasAPedidos(demo.ventas)];
 }
 
 export async function actualizarPedido(id, cambios) {

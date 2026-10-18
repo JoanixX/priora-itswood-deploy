@@ -16,7 +16,6 @@ import s from './Inicio.module.css';
 
 const FUENTE_HIST = 'Fuente: datos reales anonimizados de la hoja Ventas 2026 (jun–oct 2026).';
 const FUENTE_MERMIN = 'Fuente: registros de Mermín.';
-const ventas = obtenerVentasHistoricas();
 // Recharts pinta atributos SVG: ahí no funcionan las variables CSS.
 const SERIE_1 = '#a0521f';
 const TINTA = '#3E2F25';
@@ -45,7 +44,8 @@ function TablaDatos({ filas, columnas }) {
 }
 
 export default function Inicio() {
-  const { pedidos, actualizarPedido, toast, config } = useApp();
+  const { pedidos, ventas: ventasCtx, actualizarPedido, toast, config } = useApp();
+  const ventas = ventasCtx || obtenerVentasHistoricas();
   const navegar = useNavigate();
   const [periodo, setPeriodo] = useState('todo');
   const [chat, setChat] = useState(null);
@@ -53,8 +53,8 @@ export default function Inicio() {
   const cargarChat = useCallback(() => obtenerMetricasChat(periodo).then(setChat).catch(() => setChat(null)), [periodo]);
   usePolling(cargarChat, 10000);
 
-  const m = useMemo(() => calcularMetricas(ventas, periodo, config.reglas.minimo_empresa), [periodo, config.reglas.minimo_empresa]);
-  const meses = useMemo(() => mesesDisponibles(ventas), []);
+  const m = useMemo(() => calcularMetricas(ventas, periodo, config.reglas.minimo_empresa), [ventas, periodo, config.reglas.minimo_empresa]);
+  const meses = useMemo(() => mesesDisponibles(ventas), [ventas]);
 
   // "Atiende primero": lo recién llegado de Mermín arriba; luego lo urgente por prioridad y fecha.
   const bandeja = useMemo(() => ordenarBandeja(pedidos), [pedidos]);

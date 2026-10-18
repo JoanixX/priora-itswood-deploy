@@ -1,6 +1,8 @@
 // Estado en memoria del modo ejemplo. Se pierde al recargar (es una demo).
 import { CONFIG_DEMO } from '../../data/configDemo.js';
 import catalogo from '../../data/catalogo.demo.json';
+import ventasDemo from '../../data/ventas_2026.demo.json';
+import { agruparClientes } from '../../lib/segmentos.js';
 import { hoyISO, sumarDias } from '../../lib/format.js';
 
 const hoy = hoyISO();
@@ -64,6 +66,8 @@ const PEDIDOS_EJEMPLO = [
 export const demo = {
   config: structuredClone(CONFIG_DEMO),
   catalogo: structuredClone(catalogo),
+  ventas: structuredClone(ventasDemo),
+  clientes: agruparClientes(ventasDemo),
   pedidos: structuredClone(PEDIDOS_EJEMPLO),
   // Registros de Mermín en esta sesión de demo: para las métricas de respuesta y conversión.
   conversaciones: [],
@@ -76,6 +80,7 @@ export const demo = {
   fuentes: [
     { id: 'F-E1', nombre: 'Ventas 2026 (ejemplo)', tipo: 'ventas', url: 'https://docs.google.com/spreadsheets/d/ejemplo', estado: 'ok', error: null, ultima_sync: hace(900), filas: 264 },
   ],
+  fuentesFilas: {},
   siguientePedido: 1,
   siguienteNotificacion: 1,
 };

@@ -7,7 +7,7 @@ import { listarPedidos, obtenerPedido, actualizarPedido, agregarNotificacion } f
 import { leerArchivo, validarCatalogo, catalogoDesdeFilas, plantilla } from './catalogo.js';
 import { calcularMetricas, validarPeriodo } from './metricas.js';
 import { resumenSegmentos, recomendacionesDe } from './segmentos.js';
-import { nuevaFuente, sincronizar } from './fuentes.js';
+import { nuevaFuente, sincronizar, obtenerDatosFuente, fuenteDesdeArchivo } from './fuentes.js';
 import { formatoSoles, hoyISO } from './formato.js';
 import { montoPedido } from './prioridad.js';
 import { ipDe } from './auth.js';
@@ -66,6 +66,13 @@ async function archivoSubido(req) {
   const { nombre, contenido } = leerMultipart(buf, req.headers['content-type']);
   if (!contenido.length) throw new ErrorHttp(400, 'El archivo está vacío');
   try { return leerArchivo(nombre, contenido); } catch (e) { throw new ErrorHttp(400, e.message); }
+}
+
+async function archivoSubidoConNombre(req) {
+  const buf = await leerCuerpo(req, LIMITE_ARCHIVO);
+  const { nombre, contenido } = leerMultipart(buf, req.headers['content-type']);
+  if (!contenido.length) throw new ErrorHttp(400, 'El archivo está vacío');
+  try { return { nombre, filas: leerArchivo(nombre, contenido) }; } catch (e) { throw new ErrorHttp(400, e.message); }
 }
 
 /** Mantiene los ids del catálogo actual cuando el nombre coincide (así siguen valiendo los pedidos y sugeridos). */
@@ -136,6 +143,7 @@ export function crearApp({ almacen, google = null, origenes = ['*'], version = '
       if (entrada.error) throw new ErrorHttp(400, entrada.error);
       return responderChat(almacen, entrada);
     }],
+    ['GET', /^\/ventas$/, () => almacen.datos.ventas],
     ['GET', /^\/pedidos$/, (req, _m, url) => {
       const estado = url.searchParams.get('estado');
       if (estado && !['nuevo', 'derivado', 'confirmado'].includes(estado)) throw new ErrorHttp(400, 'estado debe ser nuevo, derivado o confirmado');
@@ -170,6 +178,19 @@ export function crearApp({ almacen, google = null, origenes = ['*'], version = '
       sincronizar(almacen, google, r.fuente);
       const { recurso_id, ...f } = r.fuente;
       return f;
+    }],
+    ['POST', /^\/fuentes\/archivo$/, async (req, _m, url) => {
+      const tipo = url.searchParams.get('tipo') || 'ventas';
+      const { nombre, filas } = await archivoSubidoConNombre(req);
+      const r = fuenteDesdeArchivo(almacen, { nombreArchivo: nombre, filas, tipo });
+      if (r.error) throw new ErrorHttp(r.status, r.error);
+      const { recurso_id, ...f } = r.fuente;
+      return f;
+    }],
+    ['GET', /^\/fuentes\/([^/]+)\/datos$/, (req, m) => {
+      const d = obtenerDatosFuente(almacen, decodeURIComponent(m[1]));
+      if (!d) throw new ErrorHttp(404, `No existe la fuente ${m[1]}`);
+      return d;
     }],
     ['POST', /^\/fuentes\/([^/]+)\/sincronizar$/, (req, m) => {
       const f = almacen.datos.fuentes.find((x) => x.id === m[1]);
@@ -226,7 +247,7 @@ export function crearApp({ almacen, google = null, origenes = ['*'], version = '
         res.end(salida.archivo);
         return;
       }
-      responder(req.method === 'POST' && ruta === '/fuentes' ? 201 : 200, salida);
+      responder(req.method === 'POST' && (ruta === '/fuentes' || ruta === '/fuentes/archivo') ? 201 : 200, salida);
     } catch (e) {
       if (!e.status) console.error('[servidor]', e);
       responder(e.status || 500, { error: e.status ? e.message : 'Error interno del servidor' });
