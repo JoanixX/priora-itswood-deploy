@@ -77,30 +77,35 @@
       </div>
     </div>
 
-    <!-- Escena decorativa: la URL de Spline vive SOLO en data-spline-url -->
-    <div class="hero-visual" data-spline-url="https://my.spline.design/claritystream-Txg1N81Wzit6iC1CdjTIFz36/" aria-hidden="true">
-      <!-- Respaldo estático (CSS + SVG): se oculta solo cuando la escena 3D terminó de cargar -->
-      <div class="hero-composicion">
-        <svg class="linea-luz" viewBox="0 0 1440 900" preserveAspectRatio="none" focusable="false">
-          <defs>
-            <linearGradient id="luz-gradiente" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stop-color="#EBA98A" stop-opacity="0"/>
-              <stop offset="0.35" stop-color="#EBA98A"/>
-              <stop offset="0.65" stop-color="#FBF6EF"/>
-              <stop offset="1" stop-color="#C98F62" stop-opacity="0.2"/>
-            </linearGradient>
-          </defs>
-          <path class="linea-luz-halo" d="M-40 560 C 300 640, 520 860, 760 820 S 1180 520, 1500 420"/>
-          <path class="linea-luz-trazo" d="M-40 560 C 300 640, 520 860, 760 820 S 1180 520, 1500 420"/>
-          <path class="linea-luz-nucleo" d="M-40 560 C 300 640, 520 860, 760 820 S 1180 520, 1500 420"/>
-        </svg>
-        <span class="panel panel-1"></span>
-        <span class="panel panel-2 panel-piedra"></span>
-        <span class="panel panel-3"></span>
-        <span class="panel panel-4"></span>
-        <span class="esfera esfera-grande"></span>
-        <span class="esfera esfera-chica"></span>
-      </div>
+    <!-- Línea de luz decorativa (SVG en línea, sin librerías). Reemplaza la escena de Spline:
+         https://my.spline.design/claritystream-Txg1N81Wzit6iC1CdjTIFz36/ -->
+    <div class="hero-visual" aria-hidden="true">
+      <!-- Halo cálido: dos copias anchas con desenfoque estático. Va en su propio SVG para que
+           el navegador lo pinte una vez y solo anime su capa (opacity y transform) -->
+      <svg class="linea-luz linea-luz-glow" viewBox="0 0 1440 900" preserveAspectRatio="none" focusable="false">
+        <defs>
+          <linearGradient id="luz-calida" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1440" y2="0">
+            <stop offset="0" stop-color="#F4D2B0" stop-opacity="0"/>
+            <stop offset="0.25" stop-color="#F4D2B0"/>
+            <stop offset="0.75" stop-color="#F4D2B0"/>
+            <stop offset="1" stop-color="#F4D2B0" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path class="linea-luz-halo" d="M-40 470 C 260 470, 470 712, 720 712 S 1180 430, 1480 70"/>
+        <path class="linea-luz-aura" d="M-40 470 C 260 470, 470 712, 720 712 S 1180 430, 1480 70"/>
+      </svg>
+      <!-- Trazo fino y nítido, que se desvanece en los dos extremos -->
+      <svg class="linea-luz" viewBox="0 0 1440 900" preserveAspectRatio="none" focusable="false">
+        <defs>
+          <linearGradient id="luz-desvanecido" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1440" y2="0">
+            <stop offset="0" stop-color="#FFF6EA" stop-opacity="0"/>
+            <stop offset="0.22" stop-color="#FFF6EA"/>
+            <stop offset="0.78" stop-color="#FFF6EA"/>
+            <stop offset="1" stop-color="#FFF6EA" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path class="linea-luz-trazo" d="M-40 470 C 260 470, 470 712, 720 712 S 1180 430, 1480 70"/>
+      </svg>
     </div>
   </section>
 
@@ -246,6 +251,5 @@
 <script src="assets/content/landing.es.js"></script>
 <script src="assets/scripts/content.js"></script>
 <script src="assets/scripts/main.js"></script>
-<script src="assets/scripts/hero-scene.js" defer></script>
 </body>
 </html>
