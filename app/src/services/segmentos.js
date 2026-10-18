@@ -1,20 +1,27 @@
 import { pedir, conRespaldo } from './api.js';
 import { demo } from './demo/store.js';
 import { calcularSegmentos, recomendaciones, borradores, canalCorto } from '../lib/segmentos.js';
-import ventas from '../data/ventas_2026.demo.json';
 
 // Rutas propuestas por el frontend (ver docs/API_CONTRATO.md). Sin backend: reglas locales.
 
 export async function listarSegmentos() {
-  const locales = calcularSegmentos(ventas);
+  const locales = calcularSegmentos(demo.ventas);
   return conRespaldo(
     async () => {
-      // El backend manda el resumen ({ id, nombre, clientes, monto, ultima_compra });
-      // la lista de alias y los productos top salen del histórico local.
+      // El backend manda el resumen ({ id, nombre, clientes, monto, ultima_compra, lista_clientes, top_productos }).
       const remotos = await pedir('/segmentos');
       return remotos.map((r) => {
         const local = locales.find((l) => l.id === r.id) || { clientes: [], top_productos: [] };
-        return { ...local, id: r.id, nombre: r.nombre, tamano: r.clientes, monto: r.monto, ultima: r.ultima_compra };
+        return {
+          ...local,
+          id: r.id,
+          nombre: r.nombre,
+          tamano: r.clientes,
+          monto: r.monto,
+          ultima: r.ultima_compra,
+          clientes: r.lista_clientes || local.clientes,
+          top_productos: r.top_productos || local.top_productos,
+        };
       });
     },
     async () => locales,

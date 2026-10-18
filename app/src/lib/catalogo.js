@@ -34,6 +34,12 @@ export function catalogoDesdeFilas(filas) {
     });
 }
 
+/** Si un producto subido se llama igual que uno existente, conserva su ID. */
+export function conIdsActuales(nuevos, actuales = []) {
+  const porNombre = new Map(actuales.map((p) => [p.nombre.toLowerCase(), p.id]));
+  return nuevos.map((p) => ({ ...p, id: porNombre.get(p.nombre.toLowerCase()) || p.id }));
+}
+
 /** Lee un .xlsx o .csv subido y devuelve filas como objetos con las claves en minúscula. */
 export async function leerArchivo(file) {
   const buf = await file.arrayBuffer();

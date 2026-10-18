@@ -247,3 +247,51 @@ test('filas de la hoja: ida y vuelta de pedidos y config', () => {
   const config = deFilas('config', aFilas('config', { asistente: 'Mermín', reglas: { umbral_alta: 30 } }));
   assert.deepEqual(config, { asistente: 'Mermín', reglas: { umbral_alta: 30 } });
 });
+
+test('fuentes datos y subida de archivos Excel/CSV (ventas, pedidos, clientes, catálogo)', async (t) => {
+  const s = await levantar();
+  t.after(s.cerrar);
+
+  const ventasIni = await s.api('/ventas');
+  assert.equal(ventasIni.status, 200);
+  assert.equal(ventasIni.datos.length, 264);
+
+  // Subir hoja de pedidos por CSV en Datos
+  const csvPedidos = [
+    'id,fecha,cliente,tipo (empresa/persona),producto,cantidad,fecha requerida,personalización,estado',
+    'PED-H01,10/10/2026,Constructora Sol SAC,empresa,Dock 3 en 1,35,20/12/2026,Logo grabado,nuevo',
+  ].join('\n');
+  const subPed = await s.subir('/fuentes/archivo?tipo=pedidos', 'pedidos_oct.csv', Buffer.from(csvPedidos));
+  assert.equal(subPed.status, 201);
+  assert.equal(subPed.datos.estado, 'ok');
+  assert.equal(subPed.datos.filas, 1);
+
+  // Consultar filas de la fuente recién subida
+  const datosPed = await s.api(`/fuentes/${subPed.datos.id}/datos`);
+  assert.equal(datosPed.status, 200);
+  assert.equal(datosPed.datos.tipo, 'pedidos');
+  assert.equal(datosPed.datos.filas.length, 1);
+  assert.equal(datosPed.datos.filas[0].id, 'PED-H01');
+  assert.equal(datosPed.datos.filas[0].cliente.empresa, 'Constructora Sol SAC');
+
+  // El pedido importado también aparece en GET /pedidos
+  const pImportado = await s.api('/pedidos/PED-H01');
+  assert.equal(pImportado.status, 200);
+  assert.equal(pImportado.datos.prioridad, 'alta');
+
+  // Subir hoja de clientes por CSV en Datos
+  const csvClientes = [
+    'cliente,tipo (empresa/persona),teléfono,correo,distrito',
+    'Minera Norte SAC,empresa,987654321,compras@mineranorte.pe,San Isidro',
+    'Lucía Pérez,persona,912345678,lucia@example.com,Miraflores',
+  ].join('\n');
+  const subCli = await s.subir('/fuentes/archivo?tipo=clientes', 'clientes.csv', Buffer.from(csvClientes));
+  assert.equal(subCli.status, 201);
+  assert.equal(subCli.datos.filas, 2);
+  const datosCli = await s.api(`/fuentes/${subCli.datos.id}/datos`);
+  assert.equal(datosCli.status, 200);
+  assert.equal(datosCli.datos.filas.length, 2);
+  assert.equal(datosCli.datos.filas[0].cliente, 'Minera Norte SAC');
+  assert.equal(datosCli.datos.filas[0].distrito, 'San Isidro');
+});
+

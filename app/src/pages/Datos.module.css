@@ -8,7 +8,9 @@
 .url { flex: 1 1 320px; }
 .lista { display: flex; flex-direction: column; gap: .6rem; }
 .lista h2 { margin: 0; }
-.fuente { display: flex; align-items: center; gap: .9rem; padding: .9rem 1rem; flex-wrap: wrap; }
+.fuente { display: flex; align-items: center; gap: .9rem; padding: .9rem 1rem; flex-wrap: wrap; transition: border-color .15s ease, box-shadow .15s ease; }
+.fuenteActiva { border-color: var(--cobre, #a0521f); box-shadow: 0 0 0 2px rgba(160, 82, 31, .18); }
+.accionesFuente { display: inline-flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
 .iconoHoja { color: var(--verde); flex-shrink: 0; }
 .fuenteTexto { flex: 1 1 220px; display: flex; flex-direction: column; min-width: 0; }
 .textoError { color: var(--coral-oscuro); font-weight: 600; }
@@ -18,6 +20,23 @@
 .error { background: rgba(235, 130, 120, .2); color: var(--coral-oscuro); }
 .gira { animation: girar 1s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
+.visor { padding: 1.15rem; display: flex; flex-direction: column; gap: .85rem; }
+.visorCabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; flex-wrap: wrap; }
+.visorCabeza h2 { margin: 0; font-size: 1.1rem; }
+.visorCabeza p { margin: .2rem 0 0; font-size: .85rem; }
+.visorControles { display: flex; align-items: center; gap: .5rem; }
+.buscar { position: relative; display: flex; align-items: center; }
+.buscar svg { position: absolute; left: .65rem; color: var(--tinta-suave); pointer-events: none; }
+.buscar input { padding-left: 2rem; min-width: 240px; }
+.tablaCaja { overflow-x: auto; border-radius: 10px; border: 1px solid rgba(62, 47, 37, .1); background: rgba(255, 255, 255, .55); }
+.tabla { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.tabla th, .tabla td { padding: .55rem .75rem; text-align: left; border-bottom: 1px solid rgba(62, 47, 37, .08); white-space: nowrap; }
+.tabla th { font-weight: 700; color: var(--tinta-suave); background: rgba(245, 238, 228, .65); }
+.tabla tbody tr:hover { background: rgba(255, 255, 255, .75); }
+.num { text-align: right !important; font-variant-numeric: tabular-nums; }
+.paginacion { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding-top: .25rem; }
+.paginacionBotones { display: inline-flex; align-items: center; gap: .5rem; }
+.paginaTexto { font-size: .84rem; font-weight: 600; }
 .columnas { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .75rem; margin-top: .6rem; }
 .tipo { padding: .9rem; }
 .tipo ul { list-style: none; padding: 0; margin: .3rem 0 0; display: flex; flex-wrap: wrap; gap: .3rem; }

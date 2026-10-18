@@ -1,6 +1,6 @@
 import { pedir, conRespaldo } from './api.js';
 import { demo } from './demo/store.js';
-import { leerArchivo, validarCatalogo, catalogoDesdeFilas, descargarPlantilla as plantillaLocal } from '../lib/catalogo.js';
+import { leerArchivo, validarCatalogo, catalogoDesdeFilas, conIdsActuales, descargarPlantilla as plantillaLocal } from '../lib/catalogo.js';
 
 export async function obtenerCatalogo() {
   return conRespaldo(() => pedir('/catalogo'), async () => structuredClone(demo.catalogo));
@@ -24,7 +24,7 @@ export async function confirmarArchivo(archivo) {
     () => pedir('/catalogo/confirmar', { method: 'POST', form: conArchivo(archivo) }),
     async () => {
       const filas = await leerArchivo(archivo);
-      demo.catalogo = catalogoDesdeFilas(filas);
+      demo.catalogo = conIdsActuales(catalogoDesdeFilas(filas), demo.catalogo);
       return { ok: true, filas: filas.length };
     },
   );

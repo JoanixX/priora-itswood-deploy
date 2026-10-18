@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { alCambiarModo, detectarBackend, enModoEjemplo } from '../services/api.js';
 import { obtenerConfig, guardarConfig as guardarConfigApi } from '../services/config.js';
-import { listarPedidos, actualizarPedido as actualizarPedidoApi } from '../services/pedidos.js';
+import { listarPedidos, listarVentas, obtenerVentasHistoricas, actualizarPedido as actualizarPedidoApi } from '../services/pedidos.js';
 import { listarNotificaciones, marcarLeida as marcarLeidaApi } from '../services/notificaciones.js';
 import { obtenerCatalogo } from '../services/catalogo.js';
 import { CONFIG_DEMO } from '../data/configDemo.js';
@@ -15,6 +15,7 @@ export const useApp = () => useContext(AppContext);
 export function AppProvider({ children }) {
   const [modoEjemplo, setModoEjemplo] = useState(enModoEjemplo());
   const [config, setConfig] = useState(CONFIG_DEMO);
+  const [ventas, setVentas] = useState(() => obtenerVentasHistoricas());
   const [pedidosCrudos, setPedidosCrudos] = useState([]);
   const [cargandoPedidos, setCargandoPedidos] = useState(true);
   const [notificaciones, setNotificaciones] = useState([]);
@@ -31,8 +32,14 @@ export function AppProvider({ children }) {
   }, []);
   const cerrarToast = useCallback((id) => setToasts((ts) => ts.filter((x) => x.id !== id)), []);
 
+  const refrescarVentas = useCallback(async () => {
+    const v = await listarVentas().catch(() => obtenerVentasHistoricas());
+    setVentas([...v]);
+  }, []);
+
   const refrescarPedidos = useCallback(async () => {
     try {
+      await refrescarVentas();
       setPedidosCrudos(await listarPedidos());
     } catch (e) {
       // 401: la sesión venció y RequiereSesion ya lleva a /login.
@@ -40,7 +47,7 @@ export function AppProvider({ children }) {
     } finally {
       setCargandoPedidos(false);
     }
-  }, []);
+  }, [refrescarVentas]);
 
   const refrescarNotificaciones = useCallback(async () => {
     const lista = await listarNotificaciones().catch(() => null);
@@ -66,11 +73,11 @@ export function AppProvider({ children }) {
     (async () => {
       await detectarBackend();
       setConfig(await obtenerConfig());
-      await refrescarCatalogo();
+      await Promise.all([refrescarCatalogo(), refrescarVentas()]);
     })().catch((e) => {
       if (e?.status !== 401) throw e; // 401: la sesión venció y RequiereSesion ya lleva a /login.
     });
-  }, [refrescarCatalogo]);
+  }, [refrescarCatalogo, refrescarVentas]);
 
   usePolling(refrescarPedidos, 10000);
   usePolling(refrescarNotificaciones, 10000);
@@ -97,6 +104,7 @@ export function AppProvider({ children }) {
 
   const valor = {
     modoEjemplo, config, guardarConfig,
+    ventas, refrescarVentas,
     pedidos, cargandoPedidos, refrescarPedidos, actualizarPedido,
     notificaciones, refrescarNotificaciones, marcarLeida,
     catalogo, refrescarCatalogo,
